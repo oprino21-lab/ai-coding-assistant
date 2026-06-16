@@ -1,418 +1,1107 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nova — AI Coding Assistant</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Coding Assistant</title>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        :root {
-            --bg-primary: #0a0a0f;
-            --bg-secondary: #12121a;
-            --bg-tertiary: #1a1a26;
-            --bg-hover: #242433;
-            --border-color: #2a2a3a;
-            --text-primary: #e8e8f0;
-            --text-secondary: #9898b0;
-            --text-muted: #5a5a72;
-            --accent-purple: #7c5cfc;
-            --accent-blue: #5c8cfc;
-            --accent-gradient: linear-gradient(135deg, #7c5cfc, #5c8cfc);
-            --accent-green: #4ade80;
-            --accent-red: #f87171;
-            --shadow-glow: 0 0 40px rgba(124,92,252,0.15);
-            --radius-sm: 6px;
-            --radius-md: 10px;
-            --transition: 150ms cubic-bezier(0.34,1.56,0.64,1);
-        }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            user-select: none;
-        }
-        ::-webkit-scrollbar { width:4px; height:4px; }
-        ::-webkit-scrollbar-track { background:transparent; }
-        ::-webkit-scrollbar-thumb { background:var(--border-color); border-radius:4px; }
-        .app { display:flex; height:100vh; overflow:hidden; }
-        .sidebar {
-            width:280px; min-width:280px;
-            background:var(--bg-secondary);
-            border-right:1px solid var(--border-color);
-            display:flex; flex-direction:column;
-            padding:16px 12px; gap:12px;
-            overflow-y:auto;
-        }
-        .sidebar-header {
-            display:flex; align-items:center; gap:10px;
-            padding:0 4px 12px 4px;
-            border-bottom:1px solid var(--border-color);
-        }
-        .logo {
-            font-size:20px; font-weight:700;
-            background:var(--accent-gradient);
-            -webkit-background-clip:text;
-            -webkit-text-fill-color:transparent;
-            letter-spacing:-0.5px;
-        }
-        .logo-badge {
-            font-size:9px; font-weight:600; text-transform:uppercase;
-            background:var(--accent-purple); color:white;
-            padding:2px 8px; border-radius:20px;
-            -webkit-text-fill-color:white;
-        }
-        .memory-section { flex:1; overflow-y:auto; }
-        .memory-header {
-            display:flex; justify-content:space-between; align-items:center;
-            padding:8px 4px;
-            font-size:11px; font-weight:600; text-transform:uppercase;
-            color:var(--text-muted);
-        }
-        .memory-item {
-            padding:10px 12px; border-radius:var(--radius-sm);
-            background:var(--bg-tertiary); margin-bottom:6px;
-            border-left:2px solid var(--accent-purple);
-            transition:var(--transition); cursor:pointer;
-            font-size:13px; line-height:1.5;
-        }
-        .memory-item:hover { background:var(--bg-hover); transform:translateX(2px); }
-        .memory-item .tag {
-            font-size:9px; font-weight:500; text-transform:uppercase;
-            color:var(--accent-blue); display:block; margin-bottom:2px;
-        }
-        .memory-item .correction-btn {
-            float:right; font-size:11px; color:var(--text-muted);
-            background:none; border:none; cursor:pointer;
-            padding:2px 6px; border-radius:4px;
-            transition:var(--transition);
-        }
-        .memory-item .correction-btn:hover { background:var(--bg-hover); color:var(--text-primary); }
-        .main-content { flex:1; display:flex; flex-direction:column; min-width:0; background:var(--bg-primary); }
-        .editor-container { flex:1; position:relative; overflow:hidden; }
-        .editor-tabs {
-            display:flex; gap:2px; padding:8px 16px 0 16px;
-            background:var(--bg-secondary);
-            border-bottom:1px solid var(--border-color);
-        }
-        .editor-tab {
-            padding:8px 16px; font-size:12px; font-weight:500;
-            color:var(--text-secondary);
-            border-radius:var(--radius-sm) var(--radius-sm) 0 0;
-            cursor:pointer; transition:var(--transition);
-            display:flex; align-items:center; gap:8px;
-            background:transparent;
-        }
-        .editor-tab.active { background:var(--bg-primary); color:var(--text-primary); }
-        .editor-tab:hover:not(.active) { background:var(--bg-hover); color:var(--text-primary); }
-        .editor-tab .close {
-            opacity:0; font-size:11px; transition:var(--transition);
-            color:var(--text-muted);
-        }
-        .editor-tab:hover .close { opacity:1; }
-        .editor-tab .close:hover { color:var(--accent-red); }
-        .code-area {
-            flex:1; padding:24px 32px;
-            font-family:'JetBrains Mono',monospace;
-            font-size:14px; line-height:1.8;
-            overflow-y:auto; position:relative;
-            background:var(--bg-primary);
-            color:var(--text-secondary);
-            white-space:pre-wrap; tab-size:2;
-        }
-        .code-area .line {
-            position:relative; padding:0 12px;
-            border-radius:4px; transition:var(--transition);
-        }
-        .code-area .line:hover { background:rgba(124,92,252,0.05); }
-        .code-area .diff-added {
-            background:rgba(74,222,128,0.12);
-            border-left:2px solid var(--accent-green);
-        }
-        .code-area .diff-removed {
-            background:rgba(248,113,113,0.08);
-            border-left:2px solid var(--accent-red);
-            opacity:0.6; text-decoration:line-through;
-        }
-        .code-area .ghost {
-            color:var(--text-muted); opacity:0.5;
-            cursor:pointer; transition:var(--transition);
-            position:relative;
-        }
-        .code-area .ghost:hover { opacity:0.9; color:var(--accent-blue); }
-        .code-area .ghost::after {
-            content:'␣'; font-size:10px; opacity:0.3; margin-left:4px;
-        }
-        .code-area .cursor-blink {
-            display:inline-block; width:2px; height:1.2em;
-            background:var(--accent-purple);
-            animation:blink 1s step-end infinite;
-            vertical-align:text-bottom;
-        }
-        @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0;} }
-        .input-bar {
-            background:var(--bg-secondary);
-            border-top:1px solid var(--border-color);
-            padding:12px 20px;
-            display:flex; align-items:center; gap:12px;
-        }
-        .input-wrapper {
-            flex:1; display:flex; align-items:center;
-            background:var(--bg-tertiary);
-            border-radius:var(--radius-md);
-            padding:8px 16px;
-            border:1px solid transparent;
-            transition:var(--transition);
-            position:relative;
-        }
-        .input-wrapper:focus-within {
-            border-color:var(--accent-purple);
-            box-shadow:0 0 0 3px rgba(124,92,252,0.15);
-        }
-        .input-wrapper .at-mention {
-            color:var(--accent-blue); font-weight:600; font-size:13px;
-            padding:2px 8px;
-            background:rgba(92,140,252,0.1);
-            border-radius:4px; margin-right:8px;
-            display:flex; align-items:center; gap:4px;
-            white-space:nowrap;
-        }
-        .input-wrapper .at-mention i { font-size:10px; cursor:pointer; }
-        .input-wrapper input {
-            flex:1; background:transparent; border:none; outline:none;
-            color:var(--text-primary); font-size:14px;
-            font-family:'Inter',sans-serif; padding:4px 0;
-        }
-        .input-wrapper input::placeholder { color:var(--text-muted); }
-        .input-actions { display:flex; gap:6px; align-items:center; }
-        .input-actions button {
-            background:none; border:none; color:var(--text-muted);
-            padding:6px 10px; border-radius:var(--radius-sm);
-            cursor:pointer; transition:var(--transition);
-            font-size:13px; display:flex; align-items:center; gap:6px;
-        }
-        .input-actions button:hover { background:var(--bg-hover); color:var(--text-primary); }
-        .input-actions button.primary {
-            background:var(--accent-gradient); color:white;
-            padding:6px 16px; font-weight:500;
-        }
-        .input-actions button.primary:hover { transform:scale(1.02); box-shadow:var(--shadow-glow); }
-        .input-actions .shortcut-hint { font-size:10px; color:var(--text-muted); font-weight:500; }
-        .timeline-panel {
-            position:fixed; right:0; top:0;
-            width:380px; height:100vh;
-            background:var(--bg-secondary);
-            border-left:1px solid var(--border-color);
-            transform:translateX(100%);
-            transition:transform 250ms cubic-bezier(0.34,1.56,0.64,1);
-            padding:20px; overflow-y:auto;
-            z-index:100;
-            box-shadow:-10px 0 40px rgba(0,0,0,0.5);
-        }
-        .timeline-panel.open { transform:translateX(0); }
-        .timeline-panel .close-timeline {
-            float:right; background:none; border:none;
-            color:var(--text-muted); font-size:20px; cursor:pointer;
-        }
-        .timeline-panel .close-timeline:hover { color:var(--text-primary); }
-        .timeline-item {
-            padding:12px 14px; background:var(--bg-tertiary);
-            border-radius:var(--radius-sm); margin-bottom:8px;
-            border-left:3px solid var(--accent-purple);
-            font-size:13px;
-        }
-        .timeline-item .time {
-            font-size:10px; color:var(--text-muted);
-            display:block; margin-bottom:4px;
-        }
-        .timeline-item .undo-btn {
-            margin-top:6px; font-size:11px; color:var(--accent-blue);
-            background:none; border:none; cursor:pointer;
-            padding:2px 8px; border-radius:4px;
-        }
-        .timeline-item .undo-btn:hover { background:rgba(92,140,252,0.1); }
-        .toggle-timeline {
-            position:fixed; bottom:80px; right:20px;
-            background:var(--bg-tertiary);
-            border:1px solid var(--border-color);
-            color:var(--text-secondary);
-            padding:10px 14px; border-radius:var(--radius-md);
-            cursor:pointer; font-size:14px;
-            transition:var(--transition); z-index:50;
-        }
-        .toggle-timeline:hover {
-            background:var(--bg-hover); color:var(--text-primary);
-            border-color:var(--accent-purple);
-        }
-        .toggle-timeline .badge {
-            background:var(--accent-purple); color:white;
-            font-size:9px; padding:2px 8px; border-radius:20px;
-            margin-left:6px;
-        }
-        @media (max-width:1024px) {
-            .sidebar { width:220px; min-width:220px; }
-            .timeline-panel { width:100%; max-width:380px; }
-        }
-        @media (max-width:768px) {
-            .sidebar { display:none; }
-            .code-area { padding:16px; font-size:13px; }
-            .input-bar { padding:8px 12px; flex-wrap:wrap; }
-            .input-actions .shortcut-hint { display:none; }
-        }
+        /* PART 2 CSS WILL GO HERE */
     </style>
 </head>
-<body>
-<div class="app">
-    <aside class="sidebar">
-        <div class="sidebar-header">
-            <span class="logo">Nova</span>
-            <span class="logo-badge">Agent</span>
-        </div>
-        <div class="memory-section">
-            <div class="memory-header">
-                <span>🧠 Memory Palace</span>
-                <span style="font-weight:400;text-transform:none;font-size:10px;">3 items</span>
-            </div>
-            <div class="memory-item">
-                <span class="tag">📁 Architecture</span>
-                <span>React + TypeScript frontend, Node.js backend</span>
-                <button class="correction-btn" onclick="correctMemory(this)">✏️</button>
-            </div>
-            <div class="memory-item">
-                <span class="tag">📦 Dependencies</span>
-                <span>Tailwind, Zustand, React Router v6</span>
-                <button class="correction-btn" onclick="correctMemory(this)">✏️</button>
-            </div>
-            <div class="memory-item">
-                <span class="tag">🔧 Recent Change</span>
-                <span>Added authentication middleware (JWT)</span>
-                <button class="correction-btn" onclick="correctMemory(this)">✏️</button>
-            </div>
-        </div>
-        <div style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border-color);font-size:11px;color:var(--text-muted);">
-            <div style="display:flex;gap:12px;">
-                <span>⌘K — Command</span>
-                <span>⌘T — Timeline</span>
-            </div>
-        </div>
-    </aside>
-    <main class="main-content">
-        <div class="editor-tabs">
-            <div class="editor-tab active"><i class="fa-regular fa-file-code"></i> App.tsx <span class="close">×</span></div>
-            <div class="editor-tab"><i class="fa-regular fa-file-code"></i> api.ts <span class="close">×</span></div>
-            <div class="editor-tab"><i class="fa-regular fa-file-code"></i> types.d.ts <span class="close">×</span></div>
-        </div>
-        <div class="editor-container">
-            <div class="code-area" id="codeArea">
-                <div class="line">import React, { useState } from 'react';</div>
-                <div class="line">import { useStore } from './store';</div>
-                <div class="line"></div>
-                <div class="line diff-added">// 🟢 AI Suggestion: Add error boundary</div>
-                <div class="line">export const App: React.FC = () => {</div>
-                <div class="line">  const { user, theme } = useStore();</div>
-                <div class="line">  const [count, setCount] = useState(0);</div>
-                <div class="line"></div>
-                <div class="line ghost">  // → handleLogin() with JWT refresh</div>
-                <div class="line">  return (</div>
-                <div class="line">    &lt;div className="app"&gt;</div>
-                <div class="line diff-removed">      &lt;h1&gt;Hello, world!&lt;/h1&gt;</div>
-                <div class="line diff-added">      &lt;h1&gt;Welcome back, {user?.name}&lt;/h1&gt;</div>
-                <div class="line">      &lt;button onClick={() =&gt; setCount(c =&gt; c + 1)}&gt;</div>
-                <div class="line">        Count: {count}</div>
-                <div class="line">      &lt;/button&gt;</div>
-                <div class="line">    &lt;/div&gt;</div>
-                <div class="line">  );</div>
-                <div class="line">};</div>
-                <div class="line"></div>
-                <div class="line ghost">  // → Add useEffect for analytics</div>
-                <span class="cursor-blink"></span>
-            </div>
-        </div>
-        <div class="input-bar">
-            <div class="input-wrapper" id="inputWrapper">
-                <span class="at-mention"><i class="fa-regular fa-at"></i> App.tsx <i class="fa-regular fa-xmark" onclick="clearMention()"></i></span>
-                <input type="text" id="commandInput" placeholder="Ask Nova to write code, fix bugs, or explain..." autofocus />
-                <div class="input-actions">
-                    <button onclick="toggleTimeline()" title="Timeline (⌘T)"><i class="fa-regular fa-clock"></i><span class="shortcut-hint">⌘T</span></button>
-                    <button onclick="submitCommand()" class="primary"><i class="fa-regular fa-paper-plane"></i> Send <span class="shortcut-hint">⌘↵</span></button>
-                </div>
-            </div>
-        </div>
-    </main>
-</div>
-<div class="timeline-panel" id="timelinePanel">
-    <button class="close-timeline" onclick="toggleTimeline()">✕</button>
-    <h3 style="margin:0 0 16px 0;font-weight:600;font-size:16px;">⏱️ Action Timeline</h3>
-    <div class="timeline-item"><span class="time">2 min ago</span><strong>Refactored</strong> — Extracted API calls to service layer<button class="undo-btn">↩ Undo</button></div>
-    <div class="timeline-item"><span class="time">5 min ago</span><strong>Generated</strong> — Unit tests for Auth component<button class="undo-btn">↩ Undo</button></div>
-    <div class="timeline-item"><span class="time">12 min ago</span><strong>Fixed</strong> — Null reference in useStore hook<button class="undo-btn">↩ Undo</button></div>
-    <div class="timeline-item" style="border-left-color:var(--accent-green);"><span class="time">18 min ago</span><strong>✅ Deployed</strong> — Preview build to staging<button class="undo-btn">↩ Rollback</button></div>
-</div>
-<button class="toggle-timeline" onclick="toggleTimeline()" id="timelineToggle"><i class="fa-regular fa-clock"></i> Timeline <span class="badge">4</span></button>
-<script>
-    const state={timelineOpen:false};
-    document.addEventListener('keydown',(e)=>{
-        if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();document.getElementById('commandInput').focus();}
-        if((e.metaKey||e.ctrlKey)&&e.key==='t'){e.preventDefault();toggleTimeline();}
-        if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();submitCommand();}
-        if(e.key==='Escape'){if(state.timelineOpen)toggleTimeline();document.getElementById('commandInput').blur();}
-    });
-    function toggleTimeline(){
-        state.timelineOpen=!state.timelineOpen;
-        document.getElementById('timelinePanel').classList.toggle('open');
-        const btn=document.getElementById('timelineToggle');
-        btn.innerHTML=state.timelineOpen?'<i class="fa-regular fa-xmark"></i> Close':'<i class="fa-regular fa-clock"></i> Timeline <span class="badge">4</span>';
-    }
-    function submitCommand(){
-        const input=document.getElementById('commandInput');
-        const text=input.value.trim();
-        if(!text)return;
-        console.log('📤 Command:',text);
-        input.value='';
-        const panel=document.getElementById('timelinePanel');
-        const item=document.createElement('div');
-        item.className='timeline-item';
-        item.style.borderLeftColor='#5c8cfc';
-        item.innerHTML=`<span class="time">Just now</span><strong>Executed</strong> — "${text}"<button class="undo-btn">↩ Undo</button>`;
-        panel.insertBefore(item,panel.children[1]);
-        const badge=document.querySelector('.toggle-timeline .badge');
-        badge.textContent=parseInt(badge.textContent)+1;
-        const wrapper=document.getElementById('inputWrapper');
-        wrapper.style.borderColor='var(--accent-green)';
-        setTimeout(()=>{wrapper.style.borderColor='transparent';},600);
-    }
-    function clearMention(){document.querySelector('.at-mention').style.display='none';}
-    function correctMemory(btn){
-        const item=btn.closest('.memory-item');
-        const text=item.querySelector('span:last-child');
-        const original=text.textContent;
-        const newText=prompt('Correct this memory:',original);
-        if(newText&&newText!==original){text.textContent=newText;btn.style.color='var(--accent-green)';setTimeout(()=>{btn.style.color='';},1000);}
-    }
-    document.querySelectorAll('.ghost').forEach(ghost=>{
-        ghost.addEventListener('click',function(){
-            const original=this.textContent.trim();
-            const expanded=prompt('Expand this suggestion:',original.replace('→ ','').trim());
-            if(expanded){this.textContent=`  
 
-            // → ${expanded}`;this.style.opacity='1';this.style.color='var(--accent-blue)';this.classList.remove('ghost');}
-        });
-    });
-    document.querySelectorAll('.diff-added').forEach(line=>{
-        line.addEventListener('click',function(){this.classList.remove('diff-added');this.style.background='transparent';this.style.borderLeft='none';});
-    });
-    document.querySelectorAll('.diff-removed').forEach(line=>{
-        line.addEventListener('click',function(){this.classList.remove('diff-removed');this.style.opacity='1';this.style.textDecoration='none';this.style.background='rgba(74,222,128,0.08)';this.style.borderLeft='2px solid var(--accent-green)';});
-    });
-    console.log('🚀 Nova AI Assistant initialized');
-    console.log('📌 Shortcuts: ⌘K (focus), ⌘T (timeline), ⌘↵ (submit)');
+<body>
+
+<div class="app-container">
+
+    <!-- MOBILE OVERLAY -->
+    <div class="mobile-overlay" id="mobileOverlay"></div>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+
+        <div class="sidebar-header">
+
+            <div class="brand">
+
+                <div class="brand-logo">
+                    AI
+                </div>
+
+                <div class="brand-text">
+
+                    <h1>AI Assistant</h1>
+
+                    <span>Premium Edition</span>
+
+                </div>
+
+            </div>
+
+            <button class="sidebar-close" id="sidebarClose">
+
+                <i class="fa-solid fa-xmark"></i>
+
+            </button>
+
+        </div>
+
+        <!-- NAVIGATION -->
+
+        <nav class="sidebar-nav">
+
+            <button class="nav-item active">
+
+                <i class="fa-regular fa-folder-open"></i>
+
+                <span>Explorer</span>
+
+            </button>
+
+            <button class="nav-item">
+
+                <i class="fa-solid fa-magnifying-glass"></i>
+
+                <span>Search</span>
+
+            </button>
+
+            <button class="nav-item">
+
+                <i class="fa-brands fa-git-alt"></i>
+
+                <span>Git</span>
+
+            </button>
+
+            <button class="nav-item">
+
+                <i class="fa-solid fa-brain"></i>
+
+                <span>Memory</span>
+
+            </button>
+
+            <button class="nav-item">
+
+                <i class="fa-solid fa-clock-rotate-left"></i>
+
+                <span>Timeline</span>
+
+            </button>
+
+            <button class="nav-item">
+
+                <i class="fa-solid fa-vial"></i>
+
+                <span>Tests</span>
+
+            </button>
+
+            <button class="nav-item">
+
+                <i class="fa-solid fa-rocket"></i>
+
+                <span>Deploy</span>
+
+            </button>
+
+        </nav>
+
+        <!-- FILE EXPLORER -->
+
+        <section class="explorer">
+
+            <div class="section-title">
+
+                PROJECT FILES
+
+            </div>
+
+            <div class="file-tree">
+
+                <div class="file-item">
+
+                    <i class="fa-solid fa-folder"></i>
+
+                    src
+
+                </div>
+
+                <div class="file-item child">
+
+                    <i class="fa-brands fa-react"></i>
+
+                    App.tsx
+
+                </div>
+
+                <div class="file-item child">
+
+                    <i class="fa-solid fa-code"></i>
+
+                    Editor.tsx
+
+                </div>
+
+                <div class="file-item child">
+
+                    <i class="fa-solid fa-terminal"></i>
+
+                    Terminal.tsx
+
+                </div>
+
+                <div class="file-item">
+
+                    <i class="fa-solid fa-file"></i>
+
+                    package.json
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </aside>
+
+    <!-- MAIN AREA -->
+
+    <main class="main-content">
+
+        <!-- TOP BAR -->
+
+        <header class="topbar">
+
+            <div class="topbar-left">
+
+                <button class="menu-btn" id="menuBtn">
+
+                    <i class="fa-solid fa-bars"></i>
+
+                </button>
+
+                <div class="workspace">
+
+                    <span class="workspace-name">
+
+                        Premium Workspace
+
+                    </span>
+
+                </div>
+
+            </div>
+
+            <div class="topbar-right">
+
+                <button class="icon-btn">
+
+                    <i class="fa-regular fa-bell"></i>
+
+                </button>
+
+                <button class="icon-btn">
+
+                    <i class="fa-solid fa-gear"></i>
+
+                </button>
+
+                <div class="profile">
+
+                    DEV
+
+                </div>
+
+            </div>
+
+        </header>
+
+        <!-- EDITOR AREA -->
+
+        <section class="editor-section">
+
+            <!-- TABS -->
+
+            <div class="editor-tabs">
+
+                <button class="tab active">
+
+                    App.tsx
+
+                </button>
+
+                <button class="tab">
+
+                    Editor.tsx
+
+                </button>
+
+                <button class="tab">
+
+                    Terminal.tsx
+
+                </button>
+
+            </div>
+
+            <!-- MONACO CONTAINER -->
+
+            <div class="editor-container">
+
+                <div class="editor-placeholder">
+
+                    <div class="editor-title">
+
+                        Monaco Editor
+
+                    </div>
+
+                    <div class="editor-subtitle">
+
+                        Real editor integration comes later
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- RIGHT PANEL -->
+
+    <aside class="right-panel">
+
+        <!-- AI PANEL -->
+
+        <section class="ai-panel">
+
+            <div class="panel-header">
+
+                AI Assistant
+
+            </div>
+
+            <div class="chat-area">
+
+                <div class="message ai">
+
+                    Analyze the project and suggest improvements.
+
+                </div>
+
+                <div class="message user">
+
+                    Generate authentication flow.
+
+                </div>
+
+            </div>
+
+            <div class="command-box">
+
+                <input
+                    type="text"
+                    placeholder="Ask AI to build, fix, or explain..."
+                    id="promptInput">
+
+                <button class="send-btn">
+
+                    <i class="fa-solid fa-paper-plane"></i>
+
+                </button>
+
+            </div>
+
+        </section>
+
+        <!-- MEMORY -->
+
+        <section class="memory-panel">
+
+            <div class="panel-header">
+
+                Memory Palace
+
+            </div>
+
+            <div class="memory-item">
+
+                React + TypeScript project
+
+            </div>
+
+            <div class="memory-item">
+
+                Follow premium UI standards
+
+            </div>
+
+            <div class="memory-item">
+
+                Mobile-first experience
+
+            </div>
+
+        </section>
+
+        <!-- TIMELINE -->
+
+        <section class="timeline-panel">
+
+            <div class="panel-header">
+
+                Timeline
+
+            </div>
+
+            <div class="timeline-item">
+
+                Generated authentication flow
+
+            </div>
+
+            <div class="timeline-item">
+
+                Created unit tests
+
+            </div>
+
+            <div class="timeline-item">
+
+                Refactored components
+
+            </div>
+
+        </section>
+
+    </aside>
+
+</div>
+
+<script>
+    /* PART 3 JAVASCRIPT WILL GO HERE */
 </script>
+
 </body>
-</html>
+                </html>
+
+/* PART 2 CSS WILL GO HERE */
+
+:root {
+    --bg: #0b0f17;
+    --panel: #121a27;
+    --panel-2: #0f1623;
+    --border: rgba(255,255,255,0.08);
+    --text: #e6e6e6;
+    --muted: #8b93a7;
+    --accent: #6c5ce7;
+    --accent-2: #00d4ff;
+    --green: #2ecc71;
+    --red: #ff4757;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Inter", sans-serif;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+}
+
+/* APP LAYOUT */
+.app-container {
+    display: flex;
+    height: 100vh;
+    width: 100%;
+}
+
+/* SIDEBAR */
+.sidebar {
+    width: 260px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    padding: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+}
+
+.brand {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.brand-logo {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.brand-text h1 {
+    font-size: 14px;
+}
+
+.brand-text span {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+/* NAV */
+.sidebar-nav {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.nav-item {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.nav-item:hover {
+    background: rgba(255,255,255,0.05);
+    color: var(--text);
+}
+
+.nav-item.active {
+    background: rgba(108,92,231,0.15);
+    color: var(--text);
+    border-left: 2px solid var(--accent);
+}
+
+/* FILE EXPLORER */
+.explorer {
+    margin-top: 10px;
+    padding: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.section-title {
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 10px;
+}
+
+.file-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.file-item {
+    font-size: 13px;
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--muted);
+}
+
+.file-item:hover {
+    background: rgba(255,255,255,0.05);
+    color: var(--text);
+}
+
+.file-item.child {
+    padding-left: 18px;
+}
+
+/* MAIN CONTENT */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* TOPBAR */
+.topbar {
+    height: 50px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-2);
+}
+
+.menu-btn, .icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    padding: 6px;
+    cursor: pointer;
+}
+
+.workspace-name {
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.profile {
+    width: 30px;
+    height: 30px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+/* EDITOR */
+.editor-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.editor-tabs {
+    display: flex;
+    gap: 5px;
+    padding: 6px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+}
+
+.tab {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.tab.active {
+    background: rgba(108,92,231,0.2);
+    color: var(--text);
+}
+
+.editor-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0a0f1a;
+}
+
+.editor-placeholder {
+    text-align: center;
+    color: var(--muted);
+}
+
+.editor-title {
+    font-size: 18px;
+    color: var(--text);
+    margin-bottom: 6px;
+}
+
+/* RIGHT PANEL */
+.right-panel {
+    width: 320px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+}
+
+/* PANELS */
+.ai-panel,
+.memory-panel,
+.timeline-panel {
+    flex: 1;
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.panel-header {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 10px;
+}
+
+/* CHAT */
+.chat-area {
+    height: 180px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.message {
+    padding: 8px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.message.ai {
+    background: rgba(108,92,231,0.15);
+}
+
+.message.user {
+    background: rgba(0,212,255,0.1);
+    align-self: flex-end;
+}
+
+/* INPUT */
+.command-box {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.command-box input {
+    flex: 1;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+}
+
+.send-btn {
+    background: var(--accent);
+    border: none;
+    color: white;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* MEMORY */
+.memory-item {
+    padding: 8px;
+    margin-bottom: 6px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* TIMELINE */
+.timeline-item {
+    padding: 8px;
+    margin-bottom: 6px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* MOBILE */
+@media (max-width: 900px) {
+    .sidebar {
+        display: none;
+    }
+
+    .right-panel {
+        display: none;
+    }
+}
+
+/* PART 3 JAVASCRIPT WILL GO HERE */
+const state = {
+    activeTab: "App.tsx",
+    messages: [
+        { type: "ai", text: "Welcome to Premium AI Assistant. How can I help you build today?" }
+    ],
+    timeline: [],
+    sidebarOpen: false
+};
+
+/* -----------------------------
+   MOBILE SIDEBAR TOGGLE
+------------------------------*/
+
+const menuBtn = document.getElementById("menuBtn");
+const sidebar = document.getElementById("sidebar");
+const mobileOverlay = document.getElementById("mobileOverlay");
+const sidebarClose = document.getElementById("sidebarClose");
+
+function openSidebar() {
+    state.sidebarOpen = true;
+    sidebar.style.transform = "translateX(0)";
+    mobileOverlay.style.display = "block";
+}
+
+function closeSidebar() {
+    state.sidebarOpen = false;
+    sidebar.style.transform = "translateX(-100%)";
+    mobileOverlay.style.display = "none";
+}
+
+menuBtn?.addEventListener("click", openSidebar);
+sidebarClose?.addEventListener("click", closeSidebar);
+mobileOverlay?.addEventListener("click", closeSidebar);
+
+/* -----------------------------
+   AI CHAT SYSTEM
+------------------------------*/
+
+const promptInput = document.getElementById("promptInput");
+const chatArea = document.querySelector(".chat-area");
+
+function renderMessages() {
+    chatArea.innerHTML = "";
+
+    state.messages.forEach(msg => {
+        const div = document.createElement("div");
+        div.className = `message ${msg.type}`;
+        div.innerText = msg.text;
+        chatArea.appendChild(div);
+    });
+
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function addMessage(type, text) {
+    state.messages.push({ type, text });
+    renderMessages();
+}
+
+/* Simulated AI response */
+function generateAIResponse(userText) {
+
+    const responses = [
+        "Analyzing your project structure...",
+        "I suggest splitting components into smaller modules.",
+        "Adding authentication layer with JWT...",
+        "Optimizing performance and bundle size...",
+        "Creating scalable architecture plan..."
+    ];
+
+    return responses[Math.floor(Math.random() * responses.length)];
+}
+
+/* Send message */
+function sendMessage() {
+    const text = promptInput.value.trim();
+    if (!text) return;
+
+    addMessage("user", text);
+    promptInput.value = "";
+
+    // simulate AI thinking delay
+    setTimeout(() => {
+        addMessage("ai", generateAIResponse(text));
+
+        addToTimeline("AI responded to: " + text);
+    }, 700);
+}
+
+/* Send on button click */
+document.querySelector(".send-btn").addEventListener("click", sendMessage);
+
+/* Send on Enter */
+promptInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        sendMessage();
+    }
+});
+
+/* -----------------------------
+   TIMELINE SYSTEM
+------------------------------*/
+
+function addToTimeline(text) {
+    const item = {
+        text,
+        time: new Date().toLocaleTimeString()
+    };
+
+    state.timeline.unshift(item);
+
+    renderTimeline();
+}
+
+function renderTimeline() {
+    const container = document.querySelector(".timeline-panel");
+
+    container.innerHTML = `<div class="panel-header">Timeline</div>`;
+
+    state.timeline.forEach(t => {
+        const div = document.createElement("div");
+        div.className = "timeline-item";
+        div.innerHTML = `
+            <strong>${t.text}</strong>
+            <br/>
+            <small>${t.time}</small>
+        `;
+        container.appendChild(div);
+    });
+}
+
+/* -----------------------------
+   TAB SWITCHING SYSTEM
+------------------------------*/
+
+const tabs = document.querySelectorAll(".tab");
+
+tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+
+        tabs.forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+
+        state.activeTab = tab.innerText;
+    });
+});
+
+/* -----------------------------
+   MEMORY INTERACTION (basic)
+------------------------------*/
+
+const memoryItems = document.querySelectorAll(".memory-item");
+
+memoryItems.forEach(item => {
+    item.addEventListener("click", () => {
+        item.style.border = "1px solid var(--accent)";
+    });
+});
+
+/* -----------------------------
+   INIT
+------------------------------*/
+
+renderMessages();
+
+console.log("🚀 Premium AI Assistant Loaded");
+
+/* -----------------------------
+   TYPING ANIMATION (AI FEEL)
+------------------------------*/
+
+function typeMessage(element, text, speed = 25) {
+    let i = 0;
+    element.innerHTML = "";
+
+    const interval = setInterval(() => {
+        if (i < text.length) {
+            element.innerHTML += text.charAt(i);
+            i++;
+        } else {
+            clearInterval(interval);
+        }
+    }, speed);
+}
+
+/* -----------------------------
+   STREAMING AI RESPONSE (SIMULATED)
+------------------------------*/
+
+function streamAIResponse(userText) {
+    const responses = [
+        "Analyzing codebase structure...",
+        "Detecting patterns and dependencies...",
+        "Generating optimized architecture...",
+        "Refactoring suggestions prepared.",
+        "Would you like me to apply changes automatically?"
+    ];
+
+    const aiMessage = document.createElement("div");
+    aiMessage.className = "message ai";
+    chatArea.appendChild(aiMessage);
+
+    let step = 0;
+
+    const interval = setInterval(() => {
+        if (step < responses.length) {
+            aiMessage.innerText = responses[step];
+            step++;
+        } else {
+            clearInterval(interval);
+            addToTimeline("AI completed analysis");
+        }
+    }, 600);
+}
+
+/* Override sendMessage for premium behavior */
+function sendMessage() {
+    const text = promptInput.value.trim();
+    if (!text) return;
+
+    addMessage("user", text);
+    promptInput.value = "";
+
+    // Replace old AI response with streaming system
+    setTimeout(() => {
+        streamAIResponse(text);
+    }, 400);
+}
+
+/* -----------------------------
+   COMMAND SYSTEM (/commands)
+------------------------------*/
+
+function handleCommands(text) {
+
+    if (text.startsWith("/")) {
+
+        const cmd = text.split(" ")[0];
+
+        switch (cmd) {
+
+            case "/build":
+                addMessage("ai", "Building project structure...");
+                addToTimeline("Project build initiated");
+                break;
+
+            case "/fix":
+                addMessage("ai", "Scanning for bugs...");
+                addToTimeline("Bug fix requested");
+                break;
+
+            case "/refactor":
+                addMessage("ai", "Refactoring codebase...");
+                addToTimeline("Refactor started");
+                break;
+
+            case "/test":
+                addMessage("ai", "Generating test cases...");
+                addToTimeline("Tests generated");
+                break;
+
+            default:
+                addMessage("ai", "Unknown command. Try /build /fix /refactor /test");
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+/* Hook command system into send */
+function sendMessage() {
+    const text = promptInput.value.trim();
+    if (!text) return;
+
+    addMessage("user", text);
+    promptInput.value = "";
+
+    if (handleCommands(text)) return;
+
+    setTimeout(() => {
+        streamAIResponse(text);
+    }, 400);
+}
+
+/* -----------------------------
+   LOADING STATES (UI FEEL)
+------------------------------*/
+
+function showLoading() {
+    const loader = document.createElement("div");
+    loader.className = "message ai";
+    loader.id = "loading";
+    loader.innerText = "Thinking...";
+    chatArea.appendChild(loader);
+}
+
+function hideLoading() {
+    const loader = document.getElementById("loading");
+    if (loader) loader.remove();
+}
+
+/* -----------------------------
+   KEYBOARD SHORTCUTS (PRO MODE)
+------------------------------*/
+
+document.addEventListener("keydown", (e) => {
+
+    // Ctrl + K → focus input
+    if (e.ctrlKey && e.key === "k") {
+        e.preventDefault();
+        promptInput.focus();
+    }
+
+    // Ctrl + L → clear chat
+    if (e.ctrlKey && e.key === "l") {
+        e.preventDefault();
+        state.messages = [];
+        renderMessages();
+    }
+
+    // Ctrl + Enter → send
+    if (e.ctrlKey && e.key === "Enter") {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+/* -----------------------------
+   NOTIFICATION SYSTEM
+------------------------------*/
+
+function notify(text) {
+    const note = document.createElement("div");
+
+    note.style.position = "fixed";
+    note.style.bottom = "20px";
+    note.style.right = "20px";
+    note.style.padding = "10px 14px";
+    note.style.background = "#1f2a44";
+    note.style.color = "white";
+    note.style.borderRadius = "8px";
+    note.style.fontSize = "13px";
+    note.style.zIndex = 9999;
+    note.innerText = text;
+
+    document.body.appendChild(note);
+
+    setTimeout(() => {
+        note.remove();
+    }, 2000);
+}
+
+/* -----------------------------
+   INITIAL BOOT SEQUENCE
+------------------------------*/
+
+setTimeout(() => {
+    notify("AI Assistant Ready 🚀");
+    addToTimeline("System initialized");
+}, 800);
+
+/* -----------------------------
+   PERFORMANCE TOUCH
+------------------------------*/
+
+console.log("⚡ Premium AI Coding Assistant Fully Loaded");
