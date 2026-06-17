@@ -7,7 +7,6 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from github import Github
 import requests
-import json
 
 # ===== SETUP LOGGING =====
 logging.basicConfig(
@@ -31,40 +30,37 @@ def run_web_server():
     port = int(os.environ.get('PORT', 10000))
     flask_app.run(host='0.0.0.0', port=port)
 
-# ===== READ KEYS =====
+# ===== READ KEYS FROM ENVIRONMENT =====
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  # This is your fine-grained token
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 REPO_NAME = os.getenv("REPO_NAME", "oprino21-lab/ai-coding-assistant")
 
-# ===== AI FUNCTION USING GITHUB MODELS =====
+# ===== AI FUNCTION =====
 def ask_ai(prompt):
-    """Use GitHub Models (Llama 4 Scout) to write code."""
+    """Use OpenRouter with gpt-oss-20b:free model."""
     try:
-        logger.info(f"📤 Sending request to GitHub Models...")
+        logger.info(f"📤 Sending request to OpenRouter...")
         
-        # GitHub Models endpoint and model
-        endpoint = "https://models.github.ai/inference"
-        model = "meta/Llama-4-Scout-17B-16E-Instruct"
-        
-        # Prepare the request
         headers = {
-            "Authorization": f"Bearer {GITHUB_TOKEN}",
-            "Content-Type": "application/json"
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://ai-coding-assistant-eup4.onrender.com",
+            "X-Title": "AI Coding Assistant"
         }
         
         data = {
+            "model": "openai/gpt-oss-20b:free",
             "messages": [
                 {"role": "system", "content": "You are a coding assistant. Write clean, working code. Provide only the code without explanations."},
                 {"role": "user", "content": f"Write code for this task: {prompt}"}
             ],
-            "temperature": 0.3,
             "max_tokens": 2000,
-            "model": model
+            "temperature": 0.3
         }
         
-        # Make the request
         response = requests.post(
-            endpoint + "/chat/completions",
+            "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
             json=data,
             timeout=60
@@ -81,22 +77,22 @@ def ask_ai(prompt):
         if "error" in result:
             error_msg = result["error"].get("message", "Unknown API error")
             logger.error(f"❌ API Error: {error_msg}")
-            raise Exception(f"GitHub Models API Error: {error_msg}")
+            raise Exception(f"OpenRouter API Error: {error_msg}")
         
         if "choices" in result and len(result["choices"]) > 0:
             content = result["choices"][0]["message"]["content"]
             logger.info(f"✅ AI Response received ({len(content)} characters)")
             return content
         else:
-            raise Exception("No response from GitHub Models")
+            raise Exception("No response from OpenRouter")
             
     except requests.exceptions.Timeout:
         raise Exception("Request timed out. The AI took too long to respond.")
     except requests.exceptions.RequestException as e:
         raise Exception(f"Network Error: {str(e)}")
     except Exception as e:
-        logger.error(f"❌ GitHub Models Error: {str(e)}")
-        raise Exception(f"GitHub Models Error: {str(e)}")
+        logger.error(f"❌ OpenRouter Error: {str(e)}")
+        raise Exception(f"OpenRouter Error: {str(e)}")
 
 # ===== GITHUB FUNCTION =====
 def create_github_pr(instruction, ai_code):
@@ -166,6 +162,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        f"🟢 **Bot Status: Online**\n\n"
+        f"📁 **Repository:** {REPO_NAME}\n"
+        "🤖 **AI Model:** openai/gpt-oss-20b:free\n"
+        "📊 **Free Tier:** 50 requests/day",
+        parse_mode="Markdown"
+    )
+
 # ===== START BOT =====
 if __name__ == "__main__":
     logger.info("🤖 Starting AI Coding Assistant...")
@@ -178,6 +183,7 @@ if __name__ == "__main__":
     # Start Telegram bot
     telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
     telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CommandHandler("status", status_command))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     logger.info("🚀 Bot is running!")
