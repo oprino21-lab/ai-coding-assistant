@@ -47,7 +47,7 @@ def ask_ai(prompt):
         logger.info(f"📤 Sending request to Gemini...")
         
         # Use Gemini Flash model (fast and free)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-pro")
         
         # Create a prompt that asks for code only
         full_prompt = f"You are a coding assistant. Write clean, working code. Provide only the code without explanations.\n\nTask: {prompt}"
