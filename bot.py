@@ -7,6 +7,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from github import Github
 from openai import OpenAI
+import openai
 
 # ===== SETUP LOGGING =====
 logging.basicConfig(
