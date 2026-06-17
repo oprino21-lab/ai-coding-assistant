@@ -46,11 +46,9 @@ def ask_ai(prompt):
     try:
         logger.info(f"📤 Sending request to Gemini...")
         
-        # Try these models in order (with correct names)
+        # Try only gemini-1.5-flash
         models_to_try = [
-            "models/gemini-1.5-pro",
-            "models/gemini-1.5-flash",
-            "models/gemini-2.0-flash-exp"
+            "models/gemini-1.5-flash"
         ]
         
         for model_name in models_to_try:
