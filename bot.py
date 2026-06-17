@@ -44,7 +44,7 @@ def ask_ai(prompt):
     }
     
     data = {
-        "model": "mimo/mimo-v2-flash",  # ← CHANGED to the free router
+        "model": "openrouter/free",  # ← CHANGED to the free router
         "messages": [
             {"role": "system", "content": "You are a coding assistant. Write clean, working code. Provide only the code without explanations."},
             {"role": "user", "content": prompt}
