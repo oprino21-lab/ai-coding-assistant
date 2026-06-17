@@ -7,9 +7,13 @@ from flask import Flask
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from github import Github
+import google.generativeai as genai
 
-# ===== SETUP =====
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# ===== SETUP LOGGING =====
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 # ===== FLASK WEB SERVER =====
@@ -29,73 +33,41 @@ def run_web_server():
 
 # ===== READ KEYS =====
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 REPO_NAME = os.getenv("REPO_NAME", "oprino21-lab/ai-coding-assistant")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# ===== AI FUNCTION - USING openrouter/free =====
+# ===== CONFIGURE GEMINI =====
+genai.configure(api_key=GEMINI_API_KEY)
+
+# ===== AI FUNCTION USING GEMINI =====
 def ask_ai(prompt):
-    """Send prompt to OpenRouter using the free model router."""
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://ai-coding-assistant-eup4.onrender.com",
-        "X-Title": "AI Coding Assistant"
-    }
-    
-    data = {
-        "model": "openrouter/free",  # ← CHANGED to the free router
-        "messages": [
-            {"role": "system", "content": "You are a coding assistant. Write clean, working code. Provide only the code without explanations."},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 2000,
-        "temperature": 0.3
-    }
-    
+    """Use Gemini AI to write code."""
     try:
-        logger.info("📤 Sending request to OpenRouter...")
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=90
-        )
+        logger.info(f"📤 Sending request to Gemini...")
         
-        if response.status_code != 200:
-            logger.error(f"❌ HTTP Error: {response.status_code}")
-            logger.error(f"Response: {response.text[:500]}")
-            raise Exception(f"HTTP Error {response.status_code}: {response.text[:200]}")
+        # Use Gemini Flash model (fast and free)
+        model = genai.GenerativeModel("gemini-1.5-flash")
         
-        result = response.json()
-        logger.info(f"📥 Response received")
+        # Create a prompt that asks for code only
+        full_prompt = f"You are a coding assistant. Write clean, working code. Provide only the code without explanations.\n\nTask: {prompt}"
         
-        if "error" in result:
-            error_msg = result["error"].get("message", "Unknown API error")
-            logger.error(f"❌ API Error: {error_msg}")
-            raise Exception(f"OpenRouter API Error: {error_msg}")
+        response = model.generate_content(full_prompt)
         
-        if "choices" not in result or len(result["choices"]) == 0:
-            logger.error(f"❌ Unexpected response: {result}")
-            raise Exception("No response from AI model. The free model might be temporarily unavailable.")
-        
-        content = result["choices"][0]["message"]["content"]
-        logger.info(f"✅ AI Response received ({len(content)} characters)")
-        return content
-        
-    except requests.exceptions.Timeout:
-        raise Exception("Request timed out. The AI took too long to respond.")
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"Network Error: {str(e)}")
-    except KeyError as e:
-        raise Exception("Unexpected API response. Please check your OpenRouter API key.")
+        if response.text:
+            logger.info(f"✅ Gemini response received ({len(response.text)} chars)")
+            return response.text
+        else:
+            raise Exception("No response from Gemini")
+            
     except Exception as e:
-        raise e
+        logger.error(f"❌ Gemini Error: {str(e)}")
+        raise Exception(f"Gemini API Error: {str(e)}")
 
 # ===== GITHUB FUNCTION =====
 def create_github_pr(instruction, ai_code):
     try:
-        logger.info("🔗 Connecting to GitHub...")
+        logger.info(f"🔗 Connecting to GitHub...")
         g = Github(GITHUB_TOKEN)
         repo = g.get_repo(REPO_NAME)
         
@@ -120,19 +92,22 @@ def create_github_pr(instruction, ai_code):
         logger.info(f"✅ PR created: {pr.html_url}")
         return pr.html_url
     except Exception as e:
-        raise Exception(f"GitHub Error: {str(e)}")
+        logger.error(f"❌ GitHub Error: {str(e)}")
+        raise
 
 # ===== TELEGRAM HANDLERS =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🤖 **AI Coding Assistant Ready!**\n\n"
-        "Send me any coding task.\n\n"
+        "Send me any coding task and I'll create a GitHub PR.\n\n"
         "📝 **Try:** `Write a Python function that adds two numbers`",
         parse_mode="Markdown"
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
+    logger.info(f"📩 Received: {user_message[:50]}...")
+    
     processing_msg = await update.message.reply_text("⏳ Processing... This takes 30-60 seconds")
     
     try:
@@ -142,37 +117,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await processing_msg.delete()
         await update.message.reply_text(
             f"✅ **Done! Pull Request created:**\n{pr_url}\n\n"
-            "📱 Open GitHub app to review and merge.",
+            "📱 Open GitHub to review and merge.",
             parse_mode="Markdown"
         )
+        logger.info(f"✅ Success for: {user_message[:50]}...")
+        
     except Exception as e:
         await processing_msg.delete()
         error_msg = str(e)
         logger.error(f"❌ Error: {error_msg}")
-        
-        if "API" in error_msg:
-            await update.message.reply_text(
-                f"❌ **API Error:**\n{error_msg}\n\n"
-                "💡 **Try again later.** The free models might be busy.",
-                parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text(f"❌ **Error:** {error_msg}", parse_mode="Markdown")
-
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        f"🟢 **Bot Status: Online**\n\n"
-        f"📁 **Repository:** {REPO_NAME}\n"
-        "🤖 **AI Model:** openrouter/free\n"
-        "📊 **Free Tier:** 50 requests/day",
-        parse_mode="Markdown"
-    )
+        await update.message.reply_text(
+            f"❌ **Error:** {error_msg}\n\n"
+            "💡 Check Render logs for details.",
+            parse_mode="Markdown"
+        )
 
 # ===== START BOT =====
 if __name__ == "__main__":
     logger.info("🤖 Starting AI Coding Assistant...")
     
-    # Start web server thread
+    # Start web server
     web_thread = Thread(target=run_web_server, daemon=True)
     web_thread.start()
     logger.info("🌐 Web server started")
@@ -180,7 +144,6 @@ if __name__ == "__main__":
     # Start Telegram bot
     telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
     telegram_app.add_handler(CommandHandler("start", start))
-    telegram_app.add_handler(CommandHandler("status", status_command))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     logger.info("🚀 Bot is running!")
