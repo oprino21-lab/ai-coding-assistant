@@ -1,5 +1,4 @@
 import os
-import requests
 import time
 import logging
 from threading import Thread
@@ -7,7 +6,8 @@ from flask import Flask
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from github import Github
-import google.generativeai as genai
+import requests
+import json
 
 # ===== SETUP LOGGING =====
 logging.basicConfig(
@@ -33,47 +33,71 @@ def run_web_server():
 
 # ===== READ KEYS =====
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  # This is your fine-grained token
 REPO_NAME = os.getenv("REPO_NAME", "oprino21-lab/ai-coding-assistant")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# ===== CONFIGURE GEMINI =====
-genai.configure(api_key=GEMINI_API_KEY)
-
-# ===== AI FUNCTION USING GEMINI =====
+# ===== AI FUNCTION USING GITHUB MODELS =====
 def ask_ai(prompt):
-    """Use Gemini AI to write code."""
+    """Use GitHub Models (Llama 4 Scout) to write code."""
     try:
-        logger.info(f"📤 Sending request to Gemini...")
+        logger.info(f"📤 Sending request to GitHub Models...")
         
-        # Try only gemini-1.5-flash
-        models_to_try = [
-            "models/gemini-1.5-flash"
-        ]
+        # GitHub Models endpoint and model
+        endpoint = "https://models.github.ai/inference"
+        model = "meta/Llama-4-Scout-17B-16E-Instruct"
         
-        for model_name in models_to_try:
-            try:
-                logger.info(f"🔄 Trying: {model_name}")
-                model = genai.GenerativeModel(model_name)
-                
-                full_prompt = f"You are a coding assistant. Write clean, working code. Provide only the code without explanations.\n\nTask: {prompt}"
-                
-                response = model.generate_content(full_prompt)
-                
-                if response.text:
-                    logger.info(f"✅ Success with {model_name}")
-                    return response.text
-                    
-            except Exception as e:
-                logger.warning(f"⚠️ {model_name} failed: {str(e)}")
-                continue
+        # Prepare the request
+        headers = {
+            "Authorization": f"Bearer {GITHUB_TOKEN}",
+            "Content-Type": "application/json"
+        }
         
-        raise Exception("All Gemini models failed")
+        data = {
+            "messages": [
+                {"role": "system", "content": "You are a coding assistant. Write clean, working code. Provide only the code without explanations."},
+                {"role": "user", "content": f"Write code for this task: {prompt}"}
+            ],
+            "temperature": 0.3,
+            "max_tokens": 2000,
+            "model": model
+        }
+        
+        # Make the request
+        response = requests.post(
+            endpoint + "/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=60
+        )
+        
+        logger.info(f"📥 Response Status: {response.status_code}")
+        
+        if response.status_code != 200:
+            logger.error(f"❌ HTTP Error: {response.text[:500]}")
+            raise Exception(f"HTTP Error {response.status_code}: {response.text[:200]}")
+        
+        result = response.json()
+        
+        if "error" in result:
+            error_msg = result["error"].get("message", "Unknown API error")
+            logger.error(f"❌ API Error: {error_msg}")
+            raise Exception(f"GitHub Models API Error: {error_msg}")
+        
+        if "choices" in result and len(result["choices"]) > 0:
+            content = result["choices"][0]["message"]["content"]
+            logger.info(f"✅ AI Response received ({len(content)} characters)")
+            return content
+        else:
+            raise Exception("No response from GitHub Models")
             
+    except requests.exceptions.Timeout:
+        raise Exception("Request timed out. The AI took too long to respond.")
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Network Error: {str(e)}")
     except Exception as e:
-        logger.error(f"❌ Gemini Error: {str(e)}")
-        raise Exception(f"Gemini API Error: {str(e)}")
-        
+        logger.error(f"❌ GitHub Models Error: {str(e)}")
+        raise Exception(f"GitHub Models Error: {str(e)}")
+
 # ===== GITHUB FUNCTION =====
 def create_github_pr(instruction, ai_code):
     try:
