@@ -28,9 +28,9 @@ def run_web_server():
     flask_app.run(host='0.0.0.0', port=port)
 
 # ===== READ KEYS =====
-TELEGRAM_TOKEN = os.getenv("8713383973:AAHor5V_aXsG2dj3VlMUUsyGH5YibqYJGl8")
-OPENROUTER_API_KEY = os.getenv("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")
-GITHUB_TOKEN = os.getenv("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")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 REPO_NAME = os.getenv("REPO_NAME", "oprino21-lab/ai-coding-assistant")
 
 # ===== AI FUNCTION - USING openrouter/free =====
