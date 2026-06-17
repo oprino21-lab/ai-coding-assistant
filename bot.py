@@ -46,24 +46,36 @@ def ask_ai(prompt):
     try:
         logger.info(f"📤 Sending request to Gemini...")
         
-        # Use Gemini Flash model (fast and free)
-        model = genai.GenerativeModel("gemini-pro")
+        # Try these models in order (with correct names)
+        models_to_try = [
+            "models/gemini-1.5-pro",
+            "models/gemini-1.5-flash",
+            "models/gemini-2.0-flash-exp"
+        ]
         
-        # Create a prompt that asks for code only
-        full_prompt = f"You are a coding assistant. Write clean, working code. Provide only the code without explanations.\n\nTask: {prompt}"
+        for model_name in models_to_try:
+            try:
+                logger.info(f"🔄 Trying: {model_name}")
+                model = genai.GenerativeModel(model_name)
+                
+                full_prompt = f"You are a coding assistant. Write clean, working code. Provide only the code without explanations.\n\nTask: {prompt}"
+                
+                response = model.generate_content(full_prompt)
+                
+                if response.text:
+                    logger.info(f"✅ Success with {model_name}")
+                    return response.text
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ {model_name} failed: {str(e)}")
+                continue
         
-        response = model.generate_content(full_prompt)
-        
-        if response.text:
-            logger.info(f"✅ Gemini response received ({len(response.text)} chars)")
-            return response.text
-        else:
-            raise Exception("No response from Gemini")
+        raise Exception("All Gemini models failed")
             
     except Exception as e:
         logger.error(f"❌ Gemini Error: {str(e)}")
         raise Exception(f"Gemini API Error: {str(e)}")
-
+        
 # ===== GITHUB FUNCTION =====
 def create_github_pr(instruction, ai_code):
     try:
