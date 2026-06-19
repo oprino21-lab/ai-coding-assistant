@@ -2,47 +2,59 @@ const axios = require('axios');
 const logger = require('../utils/logger');
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_MODEL = 'anthropic/claude-3.5-sonnet';
+
+// Models tried in order — first one that succeeds is used
+const MODEL_FALLBACKS = [
+  process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
+  'openai/gpt-3.5-turbo',
+  'meta-llama/llama-3.1-8b-instruct:free'
+];
 
 /**
  * Core OpenRouter API call.
  * Throws a descriptive error on any API or network failure.
  */
 async function callOpenRouter(messages, options = {}) {
-  const {
-    model       = DEFAULT_MODEL,
-    maxTokens   = 4096,
-    temperature = 0.2
-  } = options;
+  const { maxTokens = 4096, temperature = 0.2 } = options;
 
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('OPENROUTER_API_KEY environment variable is not set');
 
-  let response;
-  try {
-    response = await axios.post(
-      OPENROUTER_API_URL,
-      { model, messages, max_tokens: maxTokens, temperature, stream: false },
-      {
-        headers: {
-          'Authorization':  `Bearer ${apiKey}`,
-          'HTTP-Referer':   'https://ai-coding-assistant-85u2.onrender.com',
-          'X-Title':        'CodeLite AI',
-          'Content-Type':   'application/json'
-        },
-        timeout: 120000
-      }
-    );
-  } catch (err) {
-    // Axios throws on non-2xx — extract the OpenRouter error body if present
-    const status  = err.response?.status;
-    const detail  = err.response?.data?.error?.message || err.response?.data?.message || err.message;
-    throw new Error(`OpenRouter API error (${status ?? 'network'}): ${detail}`);
+  let lastError;
+
+  for (const model of MODEL_FALLBACKS) {
+    try {
+      logger.info(`Trying model: ${model}`);
+      const response = await axios.post(
+        OPENROUTER_API_URL,
+        { model, messages, max_tokens: maxTokens, temperature, stream: false },
+        {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer':  'https://ai-coding-assistant-85u2.onrender.com',
+            'X-Title':       'CodeLite AI',
+            'Content-Type':  'application/json'
+          },
+          timeout: 120000
+        }
+      );
+
+      const content = response.data?.choices?.[0]?.message?.content;
+      if (!content) throw new Error('Empty response from model');
+      logger.info(`Model succeeded: ${model}`);
+      return content;
+
+    } catch (err) {
+      const status = err.response?.status;
+      const detail = err.response?.data?.error?.message || err.response?.data?.message || err.message;
+      lastError = `Model "${model}" failed (${status ?? 'network'}): ${detail}`;
+      logger.warn(lastError);
+      // Only try next model on 404 (model not found) or 429 (rate limit)
+      if (status !== 404 && status !== 429 && status !== 400) throw new Error(lastError);
+    }
   }
 
-  const content = response.data?.choices?.[0]?.message?.content;
-  if (!content) throw new Error('OpenRouter returned an empty response');
-  return content;
+  throw new Error(`All models failed. Last error: ${lastError}`);
 }
 
 /**
