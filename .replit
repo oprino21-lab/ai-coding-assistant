@@ -10,7 +10,7 @@ channel = "stable-25_05"
 
 [userenv.shared]
 GITHUB_CLIENT_ID = "Ov23liMc4XjF0bHsYEhl"
-GITHUB_CALLBACK_URL = "https://ai-coding-assistant-eup4.onrender.com/auth/github/callback"
+GITHUB_CALLBACK_URL = "https://ai-coding-assistant-85u2.onrender.com/auth/github/callback"
 PORT = "5000"
 NODE_ENV = "development"
 

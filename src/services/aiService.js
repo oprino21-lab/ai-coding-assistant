@@ -23,7 +23,7 @@ async function callOpenRouter(messages, options = {}) {
     {
       headers: {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://ai-coding-assistant-eup4.onrender.com',
+        'HTTP-Referer': 'https://ai-coding-assistant-85u2.onrender.com',
         'X-Title': 'CodeLite AI',
         'Content-Type': 'application/json'
       },
