@@ -8,22 +8,23 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "dev":   "node src/index.js"
+    "dev": "node src/index.js"
   },
   "dependencies": {
-    "express":          "^4.18.2",
-    "express-session":  "^1.17.3",
-    "passport":         "^0.6.0",
+    "@octokit/rest": "^20.0.2",
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "diff": "^5.1.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "fs-extra": "^11.1.1",
+    "glob": "^8.1.0",
+    "openai": "^6.44.0",
+    "passport": "^0.6.0",
     "passport-github2": "^0.1.12",
-    "axios":            "^1.6.0",
-    "cors":             "^2.8.5",
-    "dotenv":           "^16.3.1",
-    "simple-git":       "^3.21.0",
-    "@octokit/rest":    "^20.0.2",
-    "diff":             "^5.1.0",
-    "winston":          "^3.11.0",
-    "uuid":             "^9.0.0",
-    "fs-extra":         "^11.1.1",
-    "glob":             "^8.1.0"
+    "simple-git": "^3.21.0",
+    "uuid": "^9.0.0",
+    "winston": "^3.11.0"
   }
 }

@@ -1,60 +1,43 @@
-const axios = require('axios');
+const OpenAI = require('openai');
 const logger = require('../utils/logger');
 
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-// Models tried in order — first one that succeeds is used
-const MODEL_FALLBACKS = [
-  process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
-  'openai/gpt-3.5-turbo',
-  'meta-llama/llama-3.1-8b-instruct:free'
-];
+function getClient() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY environment variable is not set');
+  return new OpenAI({ apiKey });
+}
 
 /**
- * Core OpenRouter API call.
- * Throws a descriptive error on any API or network failure.
+ * Core OpenAI API call — single model, clean error messages.
  */
-async function callOpenRouter(messages, options = {}) {
+async function callOpenAI(messages, options = {}) {
   const { maxTokens = 4096, temperature = 0.2 } = options;
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY environment variable is not set');
+  const client = getClient();
+  logger.info(`Calling OpenAI model: ${MODEL}`);
 
-  let lastError;
+  try {
+    const response = await client.chat.completions.create({
+      model:       MODEL,
+      messages,
+      max_tokens:  maxTokens,
+      temperature
+    });
 
-  for (const model of MODEL_FALLBACKS) {
-    try {
-      logger.info(`Trying model: ${model}`);
-      const response = await axios.post(
-        OPENROUTER_API_URL,
-        { model, messages, max_tokens: maxTokens, temperature, stream: false },
-        {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'HTTP-Referer':  'https://ai-coding-assistant-85u2.onrender.com',
-            'X-Title':       'CodeLite AI',
-            'Content-Type':  'application/json'
-          },
-          timeout: 120000
-        }
-      );
+    const content = response.choices?.[0]?.message?.content;
+    if (!content) throw new Error('OpenAI returned an empty response');
+    logger.info('OpenAI call succeeded');
+    return content;
 
-      const content = response.data?.choices?.[0]?.message?.content;
-      if (!content) throw new Error('Empty response from model');
-      logger.info(`Model succeeded: ${model}`);
-      return content;
-
-    } catch (err) {
-      const status = err.response?.status;
-      const detail = err.response?.data?.error?.message || err.response?.data?.message || err.message;
-      lastError = `Model "${model}" failed (${status ?? 'network'}): ${detail}`;
-      logger.warn(lastError);
-      // Only try next model on 404 (model not found) or 429 (rate limit)
-      if (status !== 404 && status !== 429 && status !== 400) throw new Error(lastError);
-    }
+  } catch (err) {
+    const status  = err.status ?? err.response?.status;
+    const detail  = err.message || 'Unknown error';
+    const msg     = `OpenAI API error (${status ?? 'network'}): ${detail}`;
+    logger.error(msg);
+    throw new Error(msg);
   }
-
-  throw new Error(`All models failed. Last error: ${lastError}`);
 }
 
 /**
@@ -63,7 +46,6 @@ async function callOpenRouter(messages, options = {}) {
  */
 function parseJSON(raw, fallback) {
   try {
-    // Try full parse first, then extract first { ... } block
     const match = raw.match(/\{[\s\S]*\}/);
     return JSON.parse(match ? match[0] : raw);
   } catch (_) {
@@ -83,10 +65,9 @@ function toStringArray(val) {
 async function thinkAndPlan(userInstruction, repoAnalysis) {
   logger.info('AI thinking and planning...');
 
-  // Safe guards on repoAnalysis fields
-  const fileTree  = Array.isArray(repoAnalysis?.fileTree)  ? repoAnalysis.fileTree  : [];
-  const detected  = Array.isArray(repoAnalysis?.techStack?.detected) ? repoAnalysis.techStack.detected : [];
-  const keyConts  = repoAnalysis?.keyContents && typeof repoAnalysis.keyContents === 'object'
+  const fileTree = Array.isArray(repoAnalysis?.fileTree) ? repoAnalysis.fileTree : [];
+  const detected = Array.isArray(repoAnalysis?.techStack?.detected) ? repoAnalysis.techStack.detected : [];
+  const keyConts = repoAnalysis?.keyContents && typeof repoAnalysis.keyContents === 'object'
     ? repoAnalysis.keyContents : {};
 
   const fileList       = fileTree.slice(0, 150).map(String).join('\n');
@@ -132,7 +113,7 @@ Respond ONLY with this JSON:
     }
   ];
 
-  const raw  = await callOpenRouter(messages, { temperature: 0.1, maxTokens: 2000 });
+  const raw  = await callOpenAI(messages, { temperature: 0.1, maxTokens: 2000 });
   const plan = parseJSON(raw, {
     understanding: raw,
     impactedFiles: [],
@@ -142,7 +123,6 @@ Respond ONLY with this JSON:
     summary:       userInstruction
   });
 
-  // Ensure arrays are always arrays
   plan.impactedFiles = toStringArray(plan.impactedFiles);
   plan.newFiles      = toStringArray(plan.newFiles);
   plan.plan          = toStringArray(plan.plan);
@@ -156,10 +136,10 @@ Respond ONLY with this JSON:
 async function generateCodeChanges(userInstruction, plan, repoAnalysis, existingContents) {
   logger.info('AI generating code changes...');
 
-  const impacted  = toStringArray(plan.impactedFiles);
-  const newFiles  = toStringArray(plan.newFiles);
-  const steps     = toStringArray(plan.plan);
-  const detected  = Array.isArray(repoAnalysis?.techStack?.detected) ? repoAnalysis.techStack.detected : [];
+  const impacted = toStringArray(plan.impactedFiles);
+  const newFiles = toStringArray(plan.newFiles);
+  const steps    = toStringArray(plan.plan);
+  const detected = Array.isArray(repoAnalysis?.techStack?.detected) ? repoAnalysis.techStack.detected : [];
 
   const filesToChange = [...impacted, ...newFiles];
   const existingCode  = filesToChange
@@ -207,7 +187,7 @@ Respond ONLY with this JSON:
     }
   ];
 
-  const raw    = await callOpenRouter(messages, { temperature: 0.15, maxTokens: 8000 });
+  const raw    = await callOpenAI(messages, { temperature: 0.15, maxTokens: 8000 });
   const result = parseJSON(raw, null);
 
   if (!result || !Array.isArray(result.changes) || result.changes.length === 0) {
@@ -233,7 +213,7 @@ async function explainCode(code, filePath) {
         'Cover: purpose, how it works, key functions/classes, dependencies, and any potential issues.'
     }
   ];
-  return callOpenRouter(messages, { temperature: 0.3, maxTokens: 2000 });
+  return callOpenAI(messages, { temperature: 0.3, maxTokens: 2000 });
 }
 
-module.exports = { thinkAndPlan, generateCodeChanges, explainCode, callOpenRouter };
+module.exports = { thinkAndPlan, generateCodeChanges, explainCode, callOpenAI };
