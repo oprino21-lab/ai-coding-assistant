@@ -67,19 +67,32 @@ async function getRepoFileTree(localPath, maxFiles = 500) {
     ignore: ignorePatterns
   });
 
-  const safeFiles = Array.isArray(files)
-  ? files
-  : Object.values(files || {});
+  function normalizeFiles(files) {
+  if (!files) return [];
+
+  if (Array.isArray(files)) return files;
+
+  if (typeof files === 'object') {
+    return Object.values(files).flat();
+  }
+
+  return [];
+}
+
+const safeFiles = normalizeFiles(files);
 
 return safeFiles.slice(0, maxFiles);
 
 async function readFile(localPath, filePath) {
-  const fullPath = path.resolve(localPath, filePath);
-  if (!fullPath.startsWith(path.resolve(localPath))) {
+  const basePath = path.resolve(localPath);
+  const fullPath = path.resolve(basePath, filePath);
+
+  if (!fullPath.startsWith(basePath)) {
     throw new Error('Path traversal detected');
   }
+
   return fs.readFile(fullPath, 'utf-8');
-}
+    }
 
 async function writeFile(localPath, filePath, content) {
   const fullPath = path.resolve(localPath, filePath);
