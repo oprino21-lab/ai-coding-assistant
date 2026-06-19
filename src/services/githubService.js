@@ -1,17 +1,18 @@
-const { Octokit } = require('octokit');
+const { Octokit } = require('@octokit/rest');
 const simpleGit = require('simple-git');
 const fs = require('fs-extra');
 const path = require('path');
+const { glob } = require('glob');
 const logger = require('../utils/logger');
 
 const REPOS_DIR = path.join(process.cwd(), 'repos');
 
-async function getOctokit(accessToken) {
+function getOctokit(accessToken) {
   return new Octokit({ auth: accessToken });
 }
 
 async function listUserRepos(accessToken) {
-  const octokit = await getOctokit(accessToken);
+  const octokit = getOctokit(accessToken);
   const { data } = await octokit.rest.repos.listForAuthenticatedUser({
     sort: 'updated',
     per_page: 50,
@@ -51,7 +52,6 @@ async function cloneOrUpdateRepo(accessToken, username, repoFullName) {
 }
 
 async function getRepoFileTree(localPath, maxFiles = 500) {
-  const { glob } = require('glob');
   const ignorePatterns = [
     '**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**',
     '**/*.min.js', '**/*.min.css', '**/package-lock.json', '**/yarn.lock',
@@ -64,23 +64,25 @@ async function getRepoFileTree(localPath, maxFiles = 500) {
   const files = await glob('**/*', {
     cwd: localPath,
     nodir: true,
-    ignore: ignorePatterns,
-    maxDepth: 8
+    ignore: ignorePatterns
   });
 
   return files.slice(0, maxFiles);
 }
 
 async function readFile(localPath, filePath) {
-  const fullPath = path.join(localPath, filePath);
-  if (!fullPath.startsWith(localPath)) throw new Error('Path traversal detected');
-  const content = await fs.readFile(fullPath, 'utf-8');
-  return content;
+  const fullPath = path.resolve(localPath, filePath);
+  if (!fullPath.startsWith(path.resolve(localPath))) {
+    throw new Error('Path traversal detected');
+  }
+  return fs.readFile(fullPath, 'utf-8');
 }
 
 async function writeFile(localPath, filePath, content) {
-  const fullPath = path.join(localPath, filePath);
-  if (!fullPath.startsWith(localPath)) throw new Error('Path traversal detected');
+  const fullPath = path.resolve(localPath, filePath);
+  if (!fullPath.startsWith(path.resolve(localPath))) {
+    throw new Error('Path traversal detected');
+  }
   await fs.ensureDir(path.dirname(fullPath));
   await fs.writeFile(fullPath, content, 'utf-8');
   logger.info(`Wrote file: ${filePath}`);
@@ -99,8 +101,14 @@ async function commitAndPush(localPath, accessToken, username, repoFullName, mes
   await git.commit(message);
 
   const remoteUrl = `https://${accessToken}@github.com/${repoFullName}.git`;
-  await git.addRemote('codelite-origin', remoteUrl).catch(() => {});
-  await git.remote(['set-url', 'codelite-origin', remoteUrl]);
+
+  const remotes = await git.getRemotes();
+  const hasOrigin = remotes.some(r => r.name === 'codelite-origin');
+  if (hasOrigin) {
+    await git.remote(['set-url', 'codelite-origin', remoteUrl]);
+  } else {
+    await git.addRemote('codelite-origin', remoteUrl);
+  }
 
   const branch = (await git.branchLocal()).current;
   await git.push('codelite-origin', branch);
