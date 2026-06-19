@@ -67,8 +67,11 @@ async function getRepoFileTree(localPath, maxFiles = 500) {
     ignore: ignorePatterns
   });
 
-  return files.slice(0, maxFiles);
-}
+  const safeFiles = Array.isArray(files)
+  ? files
+  : Object.values(files || {});
+
+return safeFiles.slice(0, maxFiles);
 
 async function readFile(localPath, filePath) {
   const fullPath = path.resolve(localPath, filePath);
