@@ -13,11 +13,13 @@ function getOctokit(accessToken) {
 
 async function listUserRepos(accessToken) {
   const octokit = getOctokit(accessToken);
+
   const { data } = await octokit.rest.repos.listForAuthenticatedUser({
     sort: 'updated',
     per_page: 50,
     visibility: 'all'
   });
+
   return data.map(r => ({
     id: r.id,
     name: r.name,
@@ -34,13 +36,19 @@ async function listUserRepos(accessToken) {
 
 async function cloneOrUpdateRepo(accessToken, username, repoFullName) {
   await fs.ensureDir(REPOS_DIR);
-  const localPath = path.join(REPOS_DIR, username, repoFullName.replace('/', '_'));
+
+  const localPath = path.join(
+    REPOS_DIR,
+    username,
+    repoFullName.replace('/', '_')
+  );
+
   await fs.ensureDir(path.dirname(localPath));
 
   const cloneUrl = `https://${accessToken}@github.com/${repoFullName}.git`;
 
   if (await fs.pathExists(path.join(localPath, '.git'))) {
-    logger.info(`Updating existing repo: ${repoFullName}`);
+    logger.info(`Updating repo: ${repoFullName}`);
     const git = simpleGit(localPath);
     await git.pull();
   } else {
@@ -51,14 +59,44 @@ async function cloneOrUpdateRepo(accessToken, username, repoFullName) {
   return localPath;
 }
 
+/**
+ * SAFE FILE NORMALIZER
+ */
+function normalizeFiles(files) {
+  if (!files) return [];
+  if (Array.isArray(files)) return files;
+  if (typeof files === 'object') return Object.values(files).flat();
+  return [];
+}
+
 async function getRepoFileTree(localPath, maxFiles = 500) {
   const ignorePatterns = [
-    '**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**',
-    '**/*.min.js', '**/*.min.css', '**/package-lock.json', '**/yarn.lock',
-    '**/*.jpg', '**/*.jpeg', '**/*.png', '**/*.gif', '**/*.svg',
-    '**/*.ico', '**/*.woff', '**/*.woff2', '**/*.ttf', '**/*.eot',
-    '**/*.zip', '**/*.tar', '**/*.gz', '**/__pycache__/**', '**/*.pyc',
-    '**/venv/**', '**/.env', '**/*.lock'
+    '**/node_modules/**',
+    '**/.git/**',
+    '**/dist/**',
+    '**/build/**',
+    '**/*.min.js',
+    '**/*.min.css',
+    '**/package-lock.json',
+    '**/yarn.lock',
+    '**/*.jpg',
+    '**/*.jpeg',
+    '**/*.png',
+    '**/*.gif',
+    '**/*.svg',
+    '**/*.ico',
+    '**/*.woff',
+    '**/*.woff2',
+    '**/*.ttf',
+    '**/*.eot',
+    '**/*.zip',
+    '**/*.tar',
+    '**/*.gz',
+    '**/__pycache__/**',
+    '**/*.pyc',
+    '**/venv/**',
+    '**/.env',
+    '**/*.lock'
   ];
 
   const files = await glob('**/*', {
@@ -67,21 +105,10 @@ async function getRepoFileTree(localPath, maxFiles = 500) {
     ignore: ignorePatterns
   });
 
-  function normalizeFiles(files) {
-  if (!files) return [];
+  const safeFiles = normalizeFiles(files);
 
-  if (Array.isArray(files)) return files;
-
-  if (typeof files === 'object') {
-    return Object.values(files).flat();
-  }
-
-  return [];
+  return safeFiles.slice(0, maxFiles);
 }
-
-const safeFiles = normalizeFiles(files);
-
-return safeFiles.slice(0, maxFiles);
 
 async function readFile(localPath, filePath) {
   const basePath = path.resolve(localPath);
@@ -92,19 +119,30 @@ async function readFile(localPath, filePath) {
   }
 
   return fs.readFile(fullPath, 'utf-8');
-    }
+}
 
 async function writeFile(localPath, filePath, content) {
-  const fullPath = path.resolve(localPath, filePath);
-  if (!fullPath.startsWith(path.resolve(localPath))) {
+  const basePath = path.resolve(localPath);
+  const fullPath = path.resolve(basePath, filePath);
+
+  if (!fullPath.startsWith(basePath)) {
     throw new Error('Path traversal detected');
   }
+
   await fs.ensureDir(path.dirname(fullPath));
   await fs.writeFile(fullPath, content, 'utf-8');
+
   logger.info(`Wrote file: ${filePath}`);
 }
 
-async function commitAndPush(localPath, accessToken, username, repoFullName, message, changedFiles) {
+async function commitAndPush(
+  localPath,
+  accessToken,
+  username,
+  repoFullName,
+  message,
+  changedFiles
+) {
   const git = simpleGit(localPath);
 
   await git.addConfig('user.email', 'codelite-ai@codelite.dev');
@@ -120,6 +158,7 @@ async function commitAndPush(localPath, accessToken, username, repoFullName, mes
 
   const remotes = await git.getRemotes();
   const hasOrigin = remotes.some(r => r.name === 'codelite-origin');
+
   if (hasOrigin) {
     await git.remote(['set-url', 'codelite-origin', remoteUrl]);
   } else {
@@ -130,22 +169,27 @@ async function commitAndPush(localPath, accessToken, username, repoFullName, mes
   await git.push('codelite-origin', branch);
 
   logger.info(`Committed and pushed ${changedFiles.length} file(s) to ${repoFullName}`);
+
   return { success: true, branch, message };
 }
 
 async function getFilesContent(localPath, filePaths, maxCharsPerFile = 8000) {
   const result = {};
+
   for (const fp of filePaths) {
     try {
       let content = await readFile(localPath, fp);
+
       if (content.length > maxCharsPerFile) {
         content = content.substring(0, maxCharsPerFile) + '\n... [truncated]';
       }
+
       result[fp] = content;
     } catch (e) {
       result[fp] = `[unreadable: ${e.message}]`;
     }
   }
+
   return result;
 }
 
