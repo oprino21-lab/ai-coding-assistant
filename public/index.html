@@ -362,6 +362,85 @@
     .diff-body { max-height: 300px; overflow-y: auto; padding: 12px 16px; }
     .diff-body pre { margin: 0; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
 
+    /* Credits pill */
+    .credits-pill {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 5px 11px; border-radius: 20px;
+      font-size: 12px; color: var(--text-muted);
+      cursor: default; white-space: nowrap;
+    }
+    .credits-pill svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .credits-pill .credits-val { color: var(--text); font-weight: 600; }
+
+    /* Preview Modal */
+    .preview-overlay {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(0,0,0,.75); backdrop-filter: blur(6px);
+      display: flex; flex-direction: column;
+      animation: fadeIn .2s ease;
+    }
+    .preview-overlay.hidden { display: none; }
+    .preview-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px;
+      background: var(--sidebar-bg); border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .preview-title { font-size: 15px; font-weight: 700; flex: 1; }
+    .preview-close {
+      background: transparent; border: 1px solid var(--border); color: var(--text-muted);
+      padding: 6px 10px; border-radius: 8px; cursor: pointer;
+      display: flex; align-items: center; gap: 5px; font-size: 13px;
+      transition: background .15s, color .15s;
+    }
+    .preview-close:hover { background: var(--surface); color: var(--text); }
+    .preview-close svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .preview-body { display: flex; flex: 1; min-height: 0; }
+    .preview-filetabs {
+      width: 220px; flex-shrink: 0;
+      background: var(--sidebar-bg); border-right: 1px solid var(--border);
+      overflow-y: auto; padding: 10px 8px;
+    }
+    .preview-filetabs-label {
+      font-size: 10px; font-weight: 700; letter-spacing: .7px;
+      color: var(--text-faint); text-transform: uppercase;
+      padding: 0 6px 8px;
+    }
+    .file-tab {
+      display: flex; align-items: center; gap: 7px;
+      padding: 7px 10px; border-radius: 7px; cursor: pointer;
+      font-size: 12px; color: var(--text-muted);
+      transition: background .15s; margin-bottom: 2px;
+    }
+    .file-tab:hover { background: var(--surface); color: var(--text); }
+    .file-tab.active { background: var(--surface); color: var(--text); }
+    .file-tab svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+    .file-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-tab-badge { margin-left: auto; font-size: 10px; padding: 1px 6px; border-radius: 8px; flex-shrink: 0; }
+    .file-tab-badge.create { background: #166534; color: #86efac; }
+    .file-tab-badge.modify { background: #1e3a5f; color: #93c5fd; }
+    .preview-code-area {
+      flex: 1; display: flex; flex-direction: column; min-width: 0;
+      background: var(--bg);
+    }
+    .preview-code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 18px; border-bottom: 1px solid var(--border);
+      background: var(--sidebar-bg); flex-shrink: 0;
+    }
+    .preview-code-filename { font-family: monospace; font-size: 13px; color: var(--text-muted); }
+    .preview-code-desc { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+    .preview-code-scroll { flex: 1; overflow-y: auto; }
+    .preview-code-scroll pre { margin: 0; border-radius: 0; border: none; }
+    .preview-code-scroll pre code { font-size: 13px; line-height: 1.6; padding: 20px; display: block; }
+    .preview-footer {
+      display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+      padding: 14px 20px; border-top: 1px solid var(--border);
+      background: var(--sidebar-bg); flex-shrink: 0;
+    }
+    .preview-info { font-size: 12px; color: var(--text-faint); flex: 1; }
+
     /* Action buttons */
     .action-row {
       display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;
@@ -589,6 +668,11 @@
       <svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
       <span id="topbarRepoLabel">Select repo</span>
     </button>
+    <div class="credits-pill" id="creditsPill" title="Tokens used this session">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      <span id="creditsVal" class="credits-val">0</span>
+      <span>tokens</span>
+    </div>
     <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
       <svg viewBox="0 0 24 24" id="themeIcon"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
     </button>
@@ -629,6 +713,47 @@
     </div>
   </div>
 </main>
+
+<!-- ── Preview Modal ── -->
+<div class="preview-overlay hidden" id="previewOverlay">
+  <div class="preview-header">
+    <span class="preview-title">✦ Preview Changes</span>
+    <span class="preview-info" id="previewInfo"></span>
+    <button class="btn btn-approve" id="previewApproveBtn" style="padding:8px 16px;font-size:13px">
+      <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      Approve &amp; Push
+    </button>
+    <button class="btn btn-reject" id="previewRejectBtn" style="padding:8px 14px;font-size:13px">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Reject
+    </button>
+    <button class="preview-close" onclick="closePreview()">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Close
+    </button>
+  </div>
+  <div class="preview-body">
+    <div class="preview-filetabs">
+      <div class="preview-filetabs-label">Changed Files</div>
+      <div id="previewFileTabs"></div>
+    </div>
+    <div class="preview-code-area">
+      <div class="preview-code-header">
+        <div>
+          <div class="preview-code-filename" id="previewFilename">—</div>
+          <div class="preview-code-desc" id="previewDesc"></div>
+        </div>
+        <button class="copy-btn" onclick="copyPreviewCode()" style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:6px">
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copy
+        </button>
+      </div>
+      <div class="preview-code-scroll">
+        <pre><code id="previewCode" class="hljs"></code></pre>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ── Connect Repo Modal ── -->
 <div class="modal-overlay hidden" id="repoModal">
@@ -1039,47 +1164,38 @@ async function showTaskResult(task, taskId) {
   try {
     const res  = await fetch(`/api/changes/${taskId}`);
     const data = await res.json();
-    const result = data.task?.result || task.result || {};
+    const taskData = data.task || task;
+    const result   = taskData?.changes || taskData?.result || {};
 
-    let md = `### ✦ Plan Summary\n${result.explanation || result.summary || 'AI has generated the following changes:'}\n\n`;
+    // Update token credits
+    if (taskData?.tokenUsage?.totalTokens) {
+      addTokens(taskData.tokenUsage.totalTokens);
+    }
 
     const changes = result.changes || [];
+    const explanation = result.explanation || result.summary || 'AI has generated the following changes.';
+
+    let md = `### ✦ Plan Complete\n${explanation}\n\n`;
     if (changes.length) {
-      md += `**${changes.length} file${changes.length > 1 ? 's' : ''} to be changed:**\n`;
+      md += `**${changes.length} file${changes.length > 1 ? 's' : ''} ready for review:**\n`;
       changes.forEach(c => { md += `- \`${c.path}\` — ${c.description || c.action}\n`; });
     }
 
     const msgEl = addAIMessage(md);
-
-    // Diff blocks
-    if (changes.length) {
-      const bubble = msgEl.querySelector('.bubble.ai .ai-content');
-      const diffWrapper = document.createElement('div');
-      changes.slice(0, 5).forEach(c => {
-        const block = document.createElement('div');
-        block.className = 'diff-block';
-        block.innerHTML = `
-          <div class="diff-header">
-            <span class="diff-filename">${c.path}</span>
-            <span class="diff-action ${c.action}">${c.action}</span>
-          </div>
-          <div class="diff-body">
-            <pre>${escapeHtml((c.content || '').slice(0, 1500))}${c.content?.length > 1500 ? '\n… (truncated)' : ''}</pre>
-          </div>`;
-        diffWrapper.appendChild(block);
-      });
-      bubble.appendChild(diffWrapper);
-    }
-
-    // Action buttons
     const bubble = msgEl.querySelector('.bubble.ai .ai-content');
+
+    // Action buttons — Preview is the primary CTA
     const row = document.createElement('div');
     row.className = 'action-row';
     row.id = `actions_${taskId}`;
     row.innerHTML = `
-      <button class="btn btn-approve" onclick="approveTask('${taskId}')">
+      <button class="btn btn-approve" onclick="openPreview('${taskId}')">
+        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        Preview changes
+      </button>
+      <button class="btn btn-ghost" onclick="approveTask('${taskId}')">
         <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-        Approve & push to GitHub
+        Approve &amp; push
       </button>
       <button class="btn btn-reject" onclick="rejectTask('${taskId}')">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1199,6 +1315,130 @@ function copyCode(id) {
   if (!el) return;
   navigator.clipboard.writeText(el.textContent).catch(() => {});
 }
+
+/* ════════════════════════════════════════════════════════
+   PREVIEW MODAL
+════════════════════════════════════════════════════════ */
+let previewChanges = [];
+let previewTaskId  = null;
+let previewFileIdx = 0;
+
+async function openPreview(taskId) {
+  try {
+    const res  = await fetch(`/api/changes/${taskId}`);
+    const data = await res.json();
+    const taskData = data.task || {};
+    const result   = taskData?.changes || taskData?.result || {};
+    const changes  = result.changes || [];
+
+    if (!changes.length) {
+      addAIMessage('⚠️ No file changes found to preview.');
+      return;
+    }
+
+    previewChanges = changes;
+    previewTaskId  = taskId;
+    previewFileIdx = 0;
+
+    // Build file tabs
+    const tabs = document.getElementById('previewFileTabs');
+    tabs.innerHTML = changes.map((c, i) => `
+      <div class="file-tab ${i === 0 ? 'active' : ''}" id="ptab_${i}" onclick="selectPreviewFile(${i})">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span class="file-tab-name">${c.path.split('/').pop()}</span>
+        <span class="file-tab-badge ${c.action}">${c.action}</span>
+      </div>`).join('');
+
+    // Info line
+    document.getElementById('previewInfo').textContent =
+      `${changes.length} file${changes.length > 1 ? 's' : ''} · ${result.commitMessage || ''}`;
+
+    // Wire approve/reject buttons
+    document.getElementById('previewApproveBtn').onclick = () => { closePreview(); approveTask(taskId); };
+    document.getElementById('previewRejectBtn').onclick  = () => { closePreview(); rejectTask(taskId);  };
+
+    // Show first file
+    selectPreviewFile(0);
+
+    document.getElementById('previewOverlay').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  } catch {
+    addAIMessage('⚠️ Could not load preview. Use Approve & push directly.');
+  }
+}
+
+function selectPreviewFile(idx) {
+  previewFileIdx = idx;
+  const c = previewChanges[idx];
+  if (!c) return;
+
+  // Update tab active state
+  previewChanges.forEach((_, i) => {
+    const t = document.getElementById(`ptab_${i}`);
+    if (t) t.classList.toggle('active', i === idx);
+  });
+
+  // Update header
+  document.getElementById('previewFilename').textContent = c.path;
+  document.getElementById('previewDesc').textContent     = c.description || '';
+
+  // Syntax-highlight the code
+  const codeEl = document.getElementById('previewCode');
+  const ext     = c.path.split('.').pop();
+  const langMap = { js:'javascript', ts:'typescript', py:'python', rb:'ruby', go:'go',
+                    rs:'rust', java:'java', cpp:'cpp', cs:'csharp', html:'html',
+                    css:'css', json:'json', md:'markdown', sh:'bash', yml:'yaml', yaml:'yaml' };
+  const lang    = langMap[ext] || 'plaintext';
+
+  const highlighted = hljs.getLanguage(lang)
+    ? hljs.highlight(c.content || '', { language: lang }).value
+    : escapeHtml(c.content || '');
+
+  codeEl.innerHTML    = highlighted;
+  codeEl.className    = `hljs language-${lang}`;
+
+  // Scroll code area to top
+  document.querySelector('.preview-code-scroll').scrollTop = 0;
+}
+
+function closePreview() {
+  document.getElementById('previewOverlay').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function copyPreviewCode() {
+  const c = previewChanges[previewFileIdx];
+  if (c) navigator.clipboard.writeText(c.content || '').catch(() => {});
+}
+
+// Close preview on Escape key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closePreview();
+});
+
+/* ════════════════════════════════════════════════════════
+   CREDITS / TOKEN TRACKING
+════════════════════════════════════════════════════════ */
+let sessionTokens = parseInt(localStorage.getItem('cl_tokens') || '0', 10);
+
+function addTokens(n) {
+  sessionTokens += n;
+  localStorage.setItem('cl_tokens', sessionTokens);
+  updateCreditsDisplay();
+}
+
+function updateCreditsDisplay() {
+  const el = document.getElementById('creditsVal');
+  if (!el) return;
+  el.textContent = sessionTokens.toLocaleString();
+  // Rough cost estimate: gpt-4o-mini ~$0.15/1M input + $0.60/1M output — use blended $0.30/1M
+  const costUSD = (sessionTokens / 1_000_000) * 0.30;
+  document.getElementById('creditsPill').title =
+    `${sessionTokens.toLocaleString()} tokens used this session (~$${costUSD.toFixed(4)})`;
+}
+
+// Init credits display on load
+updateCreditsDisplay();
 
 /* ════════════════════════════════════════════════════════
    START

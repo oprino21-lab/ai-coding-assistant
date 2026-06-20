@@ -51,7 +51,7 @@ router.post('/instruct', requireAuth, async (req, res) => {
         req.user.id, req.user.username, req.user.accessToken, repoFullName
       );
 
-      const plan = await thinkAndPlan(instruction, conn.analysis);
+      const { plan, usage: planUsage } = await thinkAndPlan(instruction, conn.analysis);
       updateTask(task.id, { status: 'planning', plan });
 
       const allFilesToRead = [...(plan.impactedFiles || []), ...(plan.newFiles || [])];
@@ -60,15 +60,22 @@ router.post('/instruct', requireAuth, async (req, res) => {
         : {};
 
       updateTask(task.id, { status: 'generating' });
-      const codeChanges = await generateCodeChanges(instruction, plan, conn.analysis, existingContents);
+      const { result: codeChanges, usage: genUsage } = await generateCodeChanges(instruction, plan, conn.analysis, existingContents);
+
+      const tokenUsage = {
+        promptTokens:     (planUsage?.prompt_tokens     || 0) + (genUsage?.prompt_tokens     || 0),
+        completionTokens: (planUsage?.completion_tokens || 0) + (genUsage?.completion_tokens || 0),
+        totalTokens:      (planUsage?.total_tokens      || 0) + (genUsage?.total_tokens      || 0)
+      };
 
       updateTask(task.id, {
         status: 'awaiting_approval',
         plan,
-        changes: codeChanges
+        changes: codeChanges,
+        tokenUsage
       });
 
-      logger.info(`Task ${task.id} ready for approval: ${codeChanges.changes?.length} change(s)`);
+      logger.info(`Task ${task.id} ready for approval: ${codeChanges.changes?.length} change(s) | tokens: ${tokenUsage.totalTokens}`);
     } catch (err) {
       logger.error(`Task ${task.id} failed:`, err);
       updateTask(task.id, { status: 'failed', error: err.message });
@@ -94,8 +101,8 @@ router.post('/explain', requireAuth, async (req, res) => {
       req.user.id, req.user.username, req.user.accessToken, repoFullName
     );
     const code = await githubService.readFile(conn.localPath, filePath);
-    const explanation = await explainCode(code, filePath);
-    res.json({ success: true, filePath, explanation });
+    const { explanation, usage } = await explainCode(code, filePath);
+    res.json({ success: true, filePath, explanation, tokenUsage: usage });
   } catch (err) {
     logger.error('Explain error:', err);
     res.status(500).json({ error: err.message });

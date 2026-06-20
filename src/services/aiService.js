@@ -23,8 +23,9 @@ async function callOpenAI(messages, options = {}) {
     });
     const content = response.choices?.[0]?.message?.content;
     if (!content) throw new Error('OpenAI returned an empty response');
-    logger.info('OpenAI call succeeded');
-    return content;
+    const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    logger.info(`OpenAI call succeeded — tokens: ${usage.total_tokens}`);
+    return { content, usage };
   } catch (err) {
     const status = err.status ?? err.response?.status;
     const detail = err.message || 'Unknown error';
@@ -95,7 +96,7 @@ Respond ONLY with this JSON:
     }
   ];
 
-  const raw = await callOpenAI(messages, { temperature: 0.1, maxTokens: 2000 });
+  const { content: raw, usage: planUsage } = await callOpenAI(messages, { temperature: 0.1, maxTokens: 2000 });
   const plan = parseJSON(raw, {
     understanding: raw,
     impactedFiles: [],
@@ -111,7 +112,7 @@ Respond ONLY with this JSON:
   plan.risks         = toStringArray(plan.risks);
 
   logger.info(`Plan ready — impacted: [${plan.impactedFiles.join(', ')}] | new: [${plan.newFiles.join(', ')}]`);
-  return plan;
+  return { plan, usage: planUsage };
 }
 
 async function generateCodeChanges(userInstruction, plan, repoAnalysis, existingContents) {
@@ -163,7 +164,7 @@ Respond ONLY with this JSON:
     }
   ];
 
-  const raw    = await callOpenAI(messages, { temperature: 0.15, maxTokens: 8000 });
+  const { content: raw, usage: genUsage } = await callOpenAI(messages, { temperature: 0.15, maxTokens: 8000 });
   const result = parseJSON(raw, null);
 
   if (!result || !Array.isArray(result.changes) || result.changes.length === 0) {
@@ -171,7 +172,7 @@ Respond ONLY with this JSON:
   }
 
   logger.info(`Generated ${result.changes.length} file change(s)`);
-  return result;
+  return { result, usage: genUsage };
 }
 
 async function explainCode(code, filePath) {
@@ -186,7 +187,8 @@ async function explainCode(code, filePath) {
       content: `Explain this code from \`${filePath}\`:\n\n\`\`\`\n${code}\n\`\`\`\n\nCover: purpose, how it works, key functions/classes, dependencies, and any potential issues.`
     }
   ];
-  return callOpenAI(messages, { temperature: 0.3, maxTokens: 2000 });
+  const { content, usage } = await callOpenAI(messages, { temperature: 0.3, maxTokens: 2000 });
+  return { explanation: content, usage };
 }
 
 module.exports = { thinkAndPlan, generateCodeChanges, explainCode, callOpenAI };
