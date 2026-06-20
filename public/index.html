@@ -1,396 +1,1209 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CodeLite AI — Coding Assistant</title>
+  <title>CodeLite AI</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
+    :root {
+      --bg: #212121;
+      --sidebar-bg: #171717;
+      --surface: #2f2f2f;
+      --surface2: #3d3d3d;
+      --border: #404040;
+      --text: #ececec;
+      --text-muted: #8e8ea0;
+      --text-faint: #6b6b6b;
+      --accent: #10a37f;
+      --accent-hover: #1a7f64;
+      --user-bubble: #2f2f2f;
+      --ai-bubble: transparent;
+      --input-bg: #2f2f2f;
+      --scrollbar: #404040;
+      --shadow: 0 2px 12px rgba(0,0,0,.4);
+      --radius: 12px;
+      --sidebar-width: 260px;
+    }
+    [data-theme="light"] {
+      --bg: #f9f9f9;
+      --sidebar-bg: #f0f0f0;
+      --surface: #ffffff;
+      --surface2: #e8e8e8;
+      --border: #d9d9d9;
+      --text: #1a1a1a;
+      --text-muted: #6b6b6b;
+      --text-faint: #a0a0a0;
+      --accent: #10a37f;
+      --accent-hover: #0d8c6b;
+      --user-bubble: #f0f0f0;
+      --ai-bubble: transparent;
+      --input-bg: #ffffff;
+      --scrollbar: #d0d0d0;
+      --shadow: 0 2px 12px rgba(0,0,0,.1);
+    }
 
-    /* ── Nav ── */
-    nav { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; background: #161b22; border-bottom: 1px solid #30363d; }
-    .logo { font-size: 20px; font-weight: 700; color: #58a6ff; letter-spacing: -0.5px; }
-    .logo span { color: #e6edf3; }
-    #userBadge { display: none; align-items: center; gap: 10px; }
-    #userBadge img { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #30363d; }
-    #logoutBtn { background: #21262d; border: 1px solid #30363d; color: #e6edf3; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
-    #logoutBtn:hover { background: #30363d; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      height: 100vh;
+      transition: background .2s, color .2s;
+    }
 
-    /* ── Hero ── */
-    .hero { text-align: center; padding: 64px 32px 48px; }
-    .hero h1 { font-size: 42px; font-weight: 800; background: linear-gradient(135deg, #58a6ff, #bc8cff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 16px; }
-    .hero p  { font-size: 18px; color: #8b949e; max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
-    #loginBtn { display: inline-flex; align-items: center; gap: 10px; background: #238636; color: #fff; padding: 14px 28px; border-radius: 8px; font-size: 16px; font-weight: 600; text-decoration: none; border: none; cursor: pointer; transition: background .2s; }
-    #loginBtn:hover { background: #2ea043; }
-    #loginBtn svg { width: 20px; height: 20px; fill: #fff; }
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
 
-    /* ── Status pill ── */
-    .status-bar { display: flex; justify-content: center; margin-bottom: 48px; }
-    .pill { display: inline-flex; align-items: center; gap: 6px; background: #161b22; border: 1px solid #30363d; padding: 6px 14px; border-radius: 20px; font-size: 13px; color: #8b949e; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: #3fb950; animation: pulse 2s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    /* ══════════════════════════════════════
+       LOGIN OVERLAY
+    ══════════════════════════════════════ */
+    #loginOverlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #loginOverlay.hidden { display: none; }
+    .login-card {
+      text-align: center;
+      max-width: 420px; width: 100%; padding: 0 24px;
+    }
+    .login-logo {
+      font-size: 32px; font-weight: 800; margin-bottom: 12px;
+      color: var(--accent);
+      letter-spacing: -1px;
+    }
+    .login-logo span { color: var(--text); }
+    .login-sub {
+      color: var(--text-muted); font-size: 16px;
+      margin-bottom: 40px; line-height: 1.6;
+    }
+    .login-btn {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: var(--text); color: var(--bg);
+      padding: 14px 28px; border-radius: var(--radius);
+      font-size: 15px; font-weight: 600;
+      text-decoration: none; border: none; cursor: pointer;
+      transition: opacity .2s;
+    }
+    .login-btn:hover { opacity: .85; }
+    .login-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
-    /* ── Layout ── */
-    .container { max-width: 1000px; margin: 0 auto; padding: 0 24px 64px; }
+    /* ══════════════════════════════════════
+       SIDEBAR
+    ══════════════════════════════════════ */
+    #sidebar {
+      width: var(--sidebar-width);
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      flex-shrink: 0;
+      transition: transform .25s ease;
+      z-index: 50;
+    }
+    .sidebar-top {
+      padding: 16px 12px 8px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .new-chat-btn {
+      flex: 1; display: flex; align-items: center; gap: 8px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text); padding: 9px 12px; border-radius: 8px;
+      font-size: 13px; cursor: pointer; font-weight: 500;
+      transition: background .15s;
+    }
+    .new-chat-btn:hover { background: var(--surface); }
+    .new-chat-btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .icon-btn {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-muted); padding: 8px; border-radius: 8px;
+      cursor: pointer; transition: background .15s, color .15s;
+      display: flex; align-items: center;
+    }
+    .icon-btn:hover { background: var(--surface); color: var(--text); }
+    .icon-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
 
-    /* ── Panel ── */
-    .panel { background: #161b22; border: 1px solid #30363d; border-radius: 12px; margin-bottom: 24px; overflow: hidden; }
-    .panel-header { padding: 16px 20px; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 10px; }
-    .panel-header h2 { font-size: 15px; font-weight: 600; }
-    .badge { font-size: 11px; background: #1f6feb33; color: #58a6ff; border: 1px solid #1f6feb; padding: 2px 8px; border-radius: 12px; }
-    .panel-body { padding: 20px; }
+    .sidebar-section { padding: 8px 12px 4px; }
+    .sidebar-label {
+      font-size: 11px; font-weight: 600; letter-spacing: .6px;
+      color: var(--text-faint); text-transform: uppercase;
+      padding: 0 6px 6px;
+    }
 
-    /* ── Step flow ── */
-    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-    .step { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 14px; text-align: center; }
-    .step-num { font-size: 11px; color: #58a6ff; font-weight: 700; margin-bottom: 6px; letter-spacing: 1px; }
-    .step-label { font-size: 12px; color: #8b949e; line-height: 1.4; }
+    /* History list */
+    #historyList { flex: 1; overflow-y: auto; padding: 4px 12px; }
+    .history-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 8px; cursor: pointer;
+      font-size: 13px; color: var(--text-muted);
+      transition: background .15s;
+      white-space: nowrap; overflow: hidden;
+    }
+    .history-item:hover { background: var(--surface); color: var(--text); }
+    .history-item.active { background: var(--surface); color: var(--text); }
+    .history-item svg { width: 14px; height: 14px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; }
+    .history-item span { overflow: hidden; text-overflow: ellipsis; }
+    .history-empty { font-size: 12px; color: var(--text-faint); padding: 6px 10px; }
 
-    /* ── Playground ── */
-    #playground { display: none; }
-    .field-group { margin-bottom: 16px; }
-    label { display: block; font-size: 13px; color: #8b949e; margin-bottom: 6px; font-weight: 500; }
-    input, textarea, select { width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #e6edf3; padding: 10px 12px; font-size: 14px; outline: none; font-family: inherit; transition: border-color .2s; }
-    input:focus, textarea:focus, select:focus { border-color: #58a6ff; }
-    textarea { resize: vertical; min-height: 80px; }
-    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
-    .btn { padding: 9px 18px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: background .2s; }
-    .btn-primary { background: #1f6feb; color: #fff; }
-    .btn-primary:hover { background: #388bfd; }
-    .btn-success { background: #238636; color: #fff; }
-    .btn-success:hover { background: #2ea043; }
-    .btn-danger  { background: #da3633; color: #fff; }
-    .btn-danger:hover  { background: #f85149; }
-    .btn-ghost   { background: #21262d; color: #e6edf3; border: 1px solid #30363d; }
-    .btn-ghost:hover   { background: #30363d; }
+    /* Repos section */
+    .sidebar-repos { padding: 8px 12px; border-top: 1px solid var(--border); }
+    .repo-connect-btn {
+      width: 100%; display: flex; align-items: center; gap: 8px;
+      background: transparent; border: 1px dashed var(--border);
+      color: var(--text-muted); padding: 8px 12px; border-radius: 8px;
+      font-size: 12px; cursor: pointer; margin-top: 6px;
+      transition: background .15s, border-color .15s, color .15s;
+    }
+    .repo-connect-btn:hover { background: var(--surface); border-color: var(--accent); color: var(--accent); }
+    .repo-connect-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .repo-chip {
+      display: flex; align-items: center; gap: 7px;
+      padding: 6px 10px; border-radius: 8px; cursor: pointer;
+      font-size: 12px; color: var(--text-muted);
+      transition: background .15s;
+    }
+    .repo-chip:hover { background: var(--surface); color: var(--text); }
+    .repo-chip.selected { color: var(--accent); background: var(--surface); }
+    .repo-chip svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+    .repo-chip .repo-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .repo-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: auto; flex-shrink: 0; }
 
-    /* ── Response box ── */
-    .response-box { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; font-size: 13px; font-family: 'Courier New', monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; color: #e6edf3; margin-top: 16px; display: none; }
+    /* User row at bottom */
+    .sidebar-user {
+      border-top: 1px solid var(--border);
+      padding: 12px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .user-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--surface2); object-fit: cover; flex-shrink: 0;
+    }
+    .user-info { flex: 1; overflow: hidden; }
+    .user-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .user-login { font-size: 11px; color: var(--text-muted); }
+    .logout-btn {
+      background: transparent; border: none; color: var(--text-faint);
+      cursor: pointer; padding: 4px; border-radius: 6px;
+      display: flex; align-items: center;
+      transition: color .15s;
+    }
+    .logout-btn:hover { color: #ef4444; }
+    .logout-btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; }
 
-    /* ── Task status ── */
-    .task-status { display: none; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-top: 16px; }
-    .task-status h4 { font-size: 13px; color: #8b949e; margin-bottom: 8px; }
-    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; }
-    .s-pending      { background:#21262d; color:#8b949e; }
-    .s-thinking     { background:#1f6feb22; color:#58a6ff; }
-    .s-planning     { background:#1f6feb22; color:#58a6ff; }
-    .s-generating   { background:#6e40c922; color:#bc8cff; }
-    .s-awaiting_approval { background:#9e6a0322; color:#d29922; }
-    .s-applying     { background:#23863622; color:#3fb950; }
-    .s-completed    { background:#23863622; color:#3fb950; }
-    .s-failed       { background:#da363322; color:#f85149; }
-    .s-rejected     { background:#21262d; color:#8b949e; }
+    /* ══════════════════════════════════════
+       MAIN CHAT AREA
+    ══════════════════════════════════════ */
+    #main {
+      flex: 1; display: flex; flex-direction: column;
+      min-width: 0; position: relative;
+    }
 
-    /* ── Endpoint table ── */
-    .ep-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .ep-table th { text-align: left; padding: 8px 12px; color: #58a6ff; border-bottom: 1px solid #30363d; font-weight: 600; }
-    .ep-table td { padding: 8px 12px; border-bottom: 1px solid #21262d; color: #e6edf3; }
-    .ep-table tr:last-child td { border-bottom: none; }
-    .method { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; min-width: 44px; text-align: center; }
-    .GET  { background:#1f6feb22; color:#58a6ff; }
-    .POST { background:#23863622; color:#3fb950; }
-    code { background: #21262d; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-family: monospace; color: #e6edf3; }
+    /* Top bar */
+    #topbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    #menuBtn {
+      display: none; background: transparent; border: none;
+      color: var(--text-muted); cursor: pointer; padding: 6px;
+    }
+    #menuBtn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; display: block; }
+    .topbar-title {
+      font-size: 15px; font-weight: 600; flex: 1;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .topbar-repo {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 5px 12px; border-radius: 20px;
+      font-size: 12px; color: var(--text-muted);
+      cursor: pointer; transition: border-color .15s;
+    }
+    .topbar-repo:hover { border-color: var(--accent); color: var(--text); }
+    .topbar-repo svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .theme-toggle {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-muted); padding: 7px 8px; border-radius: 8px;
+      cursor: pointer; display: flex; align-items: center;
+      transition: background .15s, color .15s;
+    }
+    .theme-toggle:hover { background: var(--surface); color: var(--text); }
+    .theme-toggle svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; }
 
-    /* ── Loader ── */
-    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Messages */
+    #messages {
+      flex: 1; overflow-y: auto;
+      padding: 24px 0;
+      scroll-behavior: smooth;
+    }
+    .welcome {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%; text-align: center;
+      padding: 32px;
+      animation: fadeIn .4s ease;
+    }
+    .welcome-icon {
+      width: 60px; height: 60px; border-radius: 16px;
+      background: linear-gradient(135deg, var(--accent), #6c63ff);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 20px; font-size: 28px;
+    }
+    .welcome h2 { font-size: 26px; font-weight: 700; margin-bottom: 10px; }
+    .welcome p { color: var(--text-muted); font-size: 15px; line-height: 1.6; max-width: 480px; }
+    .welcome-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 24px; }
+    .chip {
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 8px 14px; border-radius: 20px; font-size: 13px;
+      cursor: pointer; color: var(--text-muted);
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .chip:hover { background: var(--surface2); color: var(--text); border-color: var(--accent); }
 
-    /* ── Toast ── */
-    #toast { position: fixed; bottom: 24px; right: 24px; background: #161b22; border: 1px solid #30363d; color: #e6edf3; padding: 12px 20px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 9999; }
-    #toast.show { opacity: 1; }
+    .message-row {
+      max-width: 780px; margin: 0 auto; padding: 6px 24px;
+      animation: fadeIn .3s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    .message-row.user { display: flex; justify-content: flex-end; }
+    .message-row.ai  { display: flex; justify-content: flex-start; gap: 12px; }
+
+    .ai-avatar {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), #6c63ff);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0; margin-top: 2px;
+    }
+    .bubble {
+      max-width: 88%; padding: 12px 16px;
+      border-radius: 16px; font-size: 14px; line-height: 1.65;
+      word-break: break-word;
+    }
+    .bubble.user {
+      background: var(--user-bubble);
+      border: 1px solid var(--border);
+      border-bottom-right-radius: 4px;
+    }
+    .bubble.ai {
+      background: var(--ai-bubble);
+      padding: 4px 0;
+      max-width: 100%;
+    }
+    .bubble.ai .ai-content { max-width: 680px; }
+
+    /* Markdown inside AI bubbles */
+    .bubble.ai p  { margin-bottom: 12px; }
+    .bubble.ai p:last-child { margin-bottom: 0; }
+    .bubble.ai h1,.bubble.ai h2,.bubble.ai h3 { margin: 16px 0 8px; font-weight: 700; }
+    .bubble.ai h1 { font-size: 18px; }
+    .bubble.ai h2 { font-size: 16px; }
+    .bubble.ai h3 { font-size: 14px; }
+    .bubble.ai ul,.bubble.ai ol { padding-left: 20px; margin-bottom: 12px; }
+    .bubble.ai li { margin-bottom: 4px; }
+    .bubble.ai strong { font-weight: 700; }
+    .bubble.ai em { font-style: italic; }
+    .bubble.ai a { color: var(--accent); text-decoration: none; }
+    .bubble.ai a:hover { text-decoration: underline; }
+    .bubble.ai blockquote {
+      border-left: 3px solid var(--accent); padding-left: 12px;
+      margin: 12px 0; color: var(--text-muted);
+    }
+    .bubble.ai code:not(pre code) {
+      background: var(--surface); padding: 2px 6px;
+      border-radius: 4px; font-size: 13px; font-family: 'Fira Code', 'Consolas', monospace;
+      color: #e8b4bc;
+    }
+    .code-block { position: relative; margin: 12px 0; }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #1e1e2e; padding: 8px 14px;
+      border-radius: 10px 10px 0 0;
+      font-size: 12px; color: var(--text-muted);
+      border: 1px solid var(--border); border-bottom: none;
+    }
+    [data-theme="light"] .code-header { background: #f0f0f0; }
+    .copy-btn {
+      background: transparent; border: none; color: var(--text-muted);
+      cursor: pointer; font-size: 12px; padding: 2px 8px;
+      border-radius: 4px; transition: background .15s, color .15s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .copy-btn:hover { background: var(--surface2); color: var(--text); }
+    .copy-btn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .bubble.ai pre {
+      margin: 0; border-radius: 0 0 10px 10px;
+      border: 1px solid var(--border); border-top: none;
+    }
+    .bubble.ai pre code { font-size: 13px; line-height: 1.6; }
+
+    /* Diff preview */
+    .diff-block {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden; margin: 12px 0;
+    }
+    .diff-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .diff-filename { font-family: monospace; font-size: 12px; color: var(--text-muted); }
+    .diff-action { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+    .diff-action.create { background: #166534; color: #86efac; }
+    .diff-action.modify { background: #1e3a5f; color: #93c5fd; }
+    .diff-body { max-height: 300px; overflow-y: auto; padding: 12px 16px; }
+    .diff-body pre { margin: 0; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+
+    /* Action buttons */
+    .action-row {
+      display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 18px; border-radius: 8px; font-size: 13px;
+      font-weight: 600; cursor: pointer; border: none;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:hover { opacity: .88; }
+    .btn:active { transform: scale(.97); }
+    .btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .btn-approve { background: var(--accent); color: #fff; }
+    .btn-reject  { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost   { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+
+    /* Status badge */
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 20px;
+      font-size: 12px; font-weight: 500;
+    }
+    .status-badge.thinking { background: #1e293b; color: #60a5fa; }
+    .status-badge.planning { background: #1c1917; color: #fb923c; }
+    .status-badge.generating { background: #14213d; color: #a78bfa; }
+    .status-badge.awaiting  { background: #14532d; color: #4ade80; }
+    .status-badge.completed { background: #14532d; color: #4ade80; }
+    .status-badge.failed    { background: #450a0a; color: #f87171; }
+    .status-badge.rejected  { background: #27272a; color: #a1a1aa; }
+    .status-badge .pulse { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: blink 1.2s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* Typing indicator */
+    .typing-indicator {
+      display: flex; gap: 4px; align-items: center; padding: 6px 0;
+    }
+    .typing-indicator span {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--text-muted);
+      animation: bounce .9s ease-in-out infinite;
+    }
+    .typing-indicator span:nth-child(2) { animation-delay: .15s; }
+    .typing-indicator span:nth-child(3) { animation-delay: .3s; }
+    @keyframes bounce { 0%,80%,100%{transform:scale(1)} 40%{transform:scale(1.4)} }
+
+    /* ══════════════════════════════════════
+       INPUT AREA
+    ══════════════════════════════════════ */
+    #inputArea {
+      padding: 12px 20px 20px;
+      background: var(--bg);
+    }
+    .input-wrapper {
+      max-width: 780px; margin: 0 auto;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      transition: border-color .2s, box-shadow .2s;
+      box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    }
+    .input-wrapper:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(16,163,127,.12);
+    }
+    .input-top {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px 4px;
+    }
+    .repo-selector {
+      display: flex; align-items: center; gap: 5px;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 4px 10px; border-radius: 20px;
+      font-size: 12px; color: var(--text-muted);
+      cursor: pointer; white-space: nowrap;
+      transition: border-color .15s, color .15s;
+      max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+    }
+    .repo-selector:hover { border-color: var(--accent); color: var(--text); }
+    .repo-selector svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+    #chatInput {
+      width: 100%; background: transparent; border: none; outline: none;
+      color: var(--text); font-size: 15px; line-height: 1.6;
+      resize: none; padding: 8px 12px 4px;
+      max-height: 200px; min-height: 44px;
+      font-family: inherit;
+    }
+    #chatInput::placeholder { color: var(--text-faint); }
+    .input-bottom {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 12px 10px;
+    }
+    .input-hint { font-size: 11px; color: var(--text-faint); }
+    .send-btn {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: var(--accent); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, opacity .15s;
+    }
+    .send-btn:hover { background: var(--accent-hover); }
+    .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .send-btn svg { width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 2.5; }
+
+    /* ══════════════════════════════════════
+       MODAL (connect repo)
+    ══════════════════════════════════════ */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,.6); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+      animation: fadeIn .2s ease;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal {
+      background: var(--sidebar-bg); border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px; max-width: 460px; width: 100%;
+      box-shadow: var(--shadow);
+    }
+    .modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+    .modal p  { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5; }
+    .modal-input {
+      width: 100%; background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); padding: 10px 14px; border-radius: 8px;
+      font-size: 14px; outline: none; margin-bottom: 14px;
+      transition: border-color .2s;
+    }
+    .modal-input:focus { border-color: var(--accent); }
+    .modal-row { display: flex; gap: 10px; }
+    .btn-primary { background: var(--accent); color: #fff; flex: 1; justify-content: center; }
+    .btn-cancel  { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .modal-repos { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px; }
+    .modal-repo-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 8px; cursor: pointer;
+      font-size: 13px; color: var(--text-muted);
+      transition: background .15s;
+    }
+    .modal-repo-item:hover { background: var(--surface); color: var(--text); }
+    .modal-repo-item svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+
+    /* ══════════════════════════════════════
+       MOBILE
+    ══════════════════════════════════════ */
+    #sidebarOverlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.5); z-index: 49;
+    }
+    @media (max-width: 768px) {
+      #sidebar {
+        position: fixed; left: 0; top: 0; bottom: 0;
+        transform: translateX(-100%);
+      }
+      #sidebar.open { transform: none; }
+      #menuBtn { display: flex; }
+      #sidebarOverlay.open { display: block; }
+      .message-row { padding: 6px 14px; }
+      .input-wrapper { border-radius: 10px; }
+    }
   </style>
 </head>
 <body>
 
-<nav>
-  <div class="logo">Code<span>Lite</span> <span style="font-size:11px;color:#8b949e;font-weight:400">AI</span></div>
-  <div id="userBadge">
-    <img id="userAvatar" src="" alt="" />
-    <span id="userName" style="font-size:14px;"></span>
-    <button id="logoutBtn" onclick="logout()">Logout</button>
+<!-- ── Login Overlay ── -->
+<div id="loginOverlay">
+  <div class="login-card">
+    <div class="login-logo">Code<span>Lite</span> <span style="font-size:18px">✦</span></div>
+    <p class="login-sub">Your AI-powered coding assistant.<br/>Connect GitHub repos and ship changes with natural language.</p>
+    <a class="login-btn" href="/auth/github">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+      Continue with GitHub
+    </a>
+  </div>
+</div>
+
+<!-- ── Sidebar Overlay (mobile) ── -->
+<div id="sidebarOverlay"></div>
+
+<!-- ── Sidebar ── -->
+<nav id="sidebar">
+  <div class="sidebar-top">
+    <button class="new-chat-btn" id="newChatBtn">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New chat
+    </button>
+    <button class="icon-btn" title="Settings" onclick="toggleTheme()">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg>
+    </button>
+  </div>
+
+  <div id="historyList">
+    <div class="history-empty" id="historyEmpty">No chats yet</div>
+  </div>
+
+  <div class="sidebar-repos">
+    <div class="sidebar-label">Repositories</div>
+    <div id="repoList"></div>
+    <button class="repo-connect-btn" id="connectRepoBtn">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Connect repository
+    </button>
+  </div>
+
+  <div class="sidebar-user" id="sidebarUser" style="display:none">
+    <img class="user-avatar" id="sidebarAvatar" src="" alt="avatar" />
+    <div class="user-info">
+      <div class="user-name" id="sidebarName"></div>
+      <div class="user-login" id="sidebarLogin"></div>
+    </div>
+    <button class="logout-btn" id="logoutBtn" title="Sign out">
+      <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+    </button>
   </div>
 </nav>
 
-<div class="hero">
-  <h1>CodeLite AI Assistant</h1>
-  <p>Connect your GitHub repo, send a natural-language instruction, review AI-proposed changes, and push — all in one flow.</p>
-  <a id="loginBtn" href="/auth/github">
-    <svg viewBox="0 0 24 24"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.1 3.3 9.42 7.88 10.95.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.18a10.94 10.94 0 012.88-.39c.98 0 1.96.13 2.88.39 2.2-1.49 3.15-1.18 3.15-1.18.63 1.58.23 2.75.12 3.04.74.8 1.18 1.83 1.18 3.08 0 4.41-2.69 5.38-5.25 5.66.41.36.78 1.06.78 2.13v3.16c0 .31.21.67.8.56A11.51 11.51 0 0023.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
-    Login with GitHub
-  </a>
-</div>
+<!-- ── Main ── -->
+<main id="main">
+  <!-- Top bar -->
+  <div id="topbar">
+    <button id="menuBtn">
+      <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <span class="topbar-title">CodeLite AI</span>
+    <button class="topbar-repo" id="topbarRepo" onclick="openRepoModal()">
+      <svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+      <span id="topbarRepoLabel">Select repo</span>
+    </button>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+      <svg viewBox="0 0 24 24" id="themeIcon"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+  </div>
 
-<div class="status-bar">
-  <div class="pill"><div class="dot"></div><span id="statusText">Checking server…</span></div>
-</div>
-
-<div class="container">
-
-  <!-- AI Workflow steps -->
-  <div class="panel">
-    <div class="panel-header"><h2>How CodeLite Works</h2><div class="badge">AI Workflow</div></div>
-    <div class="panel-body">
-      <div class="steps">
-        <div class="step"><div class="step-num">STEP 1</div><div class="step-label">Login with GitHub OAuth</div></div>
-        <div class="step"><div class="step-num">STEP 2</div><div class="step-label">Connect your repository</div></div>
-        <div class="step"><div class="step-num">STEP 3</div><div class="step-label">AI analyzes full repo structure</div></div>
-        <div class="step"><div class="step-num">STEP 4</div><div class="step-label">Send natural language instruction</div></div>
-        <div class="step"><div class="step-num">STEP 5</div><div class="step-label">AI thinks, plans &amp; generates changes</div></div>
-        <div class="step"><div class="step-num">STEP 6</div><div class="step-label">Review proposed diff</div></div>
-        <div class="step"><div class="step-num">STEP 7</div><div class="step-label">Approve → commit &amp; push to GitHub</div></div>
+  <!-- Messages -->
+  <div id="messages">
+    <div class="welcome" id="welcomeScreen">
+      <div class="welcome-icon">✦</div>
+      <h2>What can I help you build?</h2>
+      <p>Select a repository, then describe the change you want in plain English. CodeLite will plan, generate, and commit the code.</p>
+      <div class="welcome-chips">
+        <div class="chip" onclick="setPrompt('Add input validation to all form fields')">Add input validation</div>
+        <div class="chip" onclick="setPrompt('Write unit tests for the main module')">Write unit tests</div>
+        <div class="chip" onclick="setPrompt('Add error handling and logging')">Add error handling</div>
+        <div class="chip" onclick="setPrompt('Refactor for better code organization')">Refactor code</div>
+        <div class="chip" onclick="setPrompt('Add a README with setup instructions')">Write README</div>
       </div>
     </div>
   </div>
 
-  <!-- Playground (shown after login) -->
-  <div id="playground" class="panel">
-    <div class="panel-header"><h2>AI Playground</h2><div class="badge">Live</div></div>
-    <div class="panel-body">
-
-      <!-- Step A: Connect Repo -->
-      <div class="field-group">
-        <label>GitHub Repository (owner/repo)</label>
-        <input id="repoInput" type="text" placeholder="e.g. your-username/my-project" />
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-ghost" onclick="connectRepo()">Connect Repo</button>
-        <button class="btn btn-ghost" onclick="analyzeRepo()">Analyze Structure</button>
-        <button class="btn btn-ghost" onclick="listRepos()">List My Repos</button>
-      </div>
-
-      <hr style="border:none;border-top:1px solid #30363d;margin:20px 0;" />
-
-      <!-- Step B: Send Instruction -->
-      <div class="field-group">
-        <label>Natural Language Instruction</label>
-        <textarea id="instructionInput" placeholder='e.g. "Add JWT authentication to the Express app" or "Fix the login bug" or "Generate tests for the user module"'></textarea>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" onclick="sendInstruction()">
-          ✨ Send to AI
+  <!-- Input -->
+  <div id="inputArea">
+    <div class="input-wrapper">
+      <div class="input-top">
+        <button class="repo-selector" id="repoSelectorBtn" onclick="openRepoModal()">
+          <svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+          <span id="repoSelectorLabel">No repo selected</span>
         </button>
       </div>
-
-      <!-- Task status tracker -->
-      <div id="taskPanel" class="task-status">
-        <h4>Task Status</h4>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <div id="statusBadge" class="status-badge s-pending">pending</div>
-          <code id="taskIdLabel" style="font-size:11px;color:#8b949e;"></code>
-        </div>
-        <div id="planSummary" style="margin-top:12px;font-size:13px;color:#8b949e;display:none;"></div>
-        <div id="approvalBtns" style="margin-top:16px;display:none;">
-          <div style="font-size:13px;color:#d29922;margin-bottom:10px;">⚠️ AI has proposed changes. Review below, then approve or reject.</div>
-          <div class="btn-row">
-            <button class="btn btn-success" onclick="approveChanges()">✅ Approve &amp; Push to GitHub</button>
-            <button class="btn btn-danger"  onclick="rejectChanges()">❌ Reject Changes</button>
-            <button class="btn btn-ghost"   onclick="viewDiff()">🔍 View Full Diff</button>
-          </div>
-        </div>
+      <textarea id="chatInput" rows="1" placeholder="Describe the code change you want…"></textarea>
+      <div class="input-bottom">
+        <span class="input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line</span>
+        <button class="send-btn" id="sendBtn" disabled>
+          <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
       </div>
-
-      <!-- Explain file -->
-      <hr style="border:none;border-top:1px solid #30363d;margin:20px 0;" />
-      <div class="field-group">
-        <label>Explain a File (optional)</label>
-        <input id="filePathInput" type="text" placeholder="e.g. src/routes/auth.js" />
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-ghost" onclick="explainFile()">🔍 Explain File</button>
-      </div>
-
-      <div id="response" class="response-box"></div>
     </div>
   </div>
+</main>
 
-  <!-- API Reference -->
-  <div class="panel">
-    <div class="panel-header"><h2>API Reference</h2><div class="badge">REST</div></div>
-    <div class="panel-body">
-      <table class="ep-table">
-        <tr><th>Method</th><th>Route</th><th>Description</th></tr>
-        <tr><td><span class="method GET">GET</span></td><td><code>/auth/github</code></td><td>Start GitHub OAuth login</td></tr>
-        <tr><td><span class="method GET">GET</span></td><td><code>/auth/me</code></td><td>Get current logged-in user</td></tr>
-        <tr><td><span class="method POST">POST</span></td><td><code>/auth/logout</code></td><td>Log out</td></tr>
-        <tr><td><span class="method GET">GET</span></td><td><code>/api/repo/list</code></td><td>List your GitHub repositories</td></tr>
-        <tr><td><span class="method POST">POST</span></td><td><code>/api/repo/connect</code></td><td>Clone &amp; connect a repository</td></tr>
-        <tr><td><span class="method POST">POST</span></td><td><code>/api/repo/analyze</code></td><td>Analyze repo structure + tech stack</td></tr>
-        <tr><td><span class="method GET">GET</span></td><td><code>/api/repo/connected</code></td><td>List connected repositories</td></tr>
-        <tr><td><span class="method POST">POST</span></td><td><code>/api/ai/instruct</code></td><td>Send natural language instruction to AI</td></tr>
-        <tr><td><span class="method GET">GET</span></td><td><code>/api/ai/task/:id</code></td><td>Poll task status</td></tr>
-        <tr><td><span class="method POST">POST</span></td><td><code>/api/ai/explain</code></td><td>Explain a specific file</td></tr>
-        <tr><td><span class="method GET">GET</span></td><td><code>/api/changes</code></td><td>List all tasks</td></tr>
-        <tr><td><span class="method GET">GET</span></td><td><code>/api/changes/:id</code></td><td>View proposed diff for a task</td></tr>
-        <tr><td><span class="method POST">POST</span></td><td><code>/api/changes/:id/approve</code></td><td>Apply changes &amp; push to GitHub</td></tr>
-        <tr><td><span class="method POST">POST</span></td><td><code>/api/changes/:id/reject</code></td><td>Reject proposed changes</td></tr>
-        <tr><td><span class="method GET">GET</span></td><td><code>/api/status</code></td><td>Server health &amp; endpoint directory</td></tr>
-      </table>
+<!-- ── Connect Repo Modal ── -->
+<div class="modal-overlay hidden" id="repoModal">
+  <div class="modal">
+    <h3>Connect a Repository</h3>
+    <p>Enter a GitHub repo in <code style="background:var(--surface);padding:2px 6px;border-radius:4px;font-size:12px">owner/repo</code> format, or pick from your GitHub repos below.</p>
+    <input class="modal-input" id="repoInput" placeholder="e.g. torvalds/linux" />
+    <div class="modal-row">
+      <button class="btn btn-primary" onclick="connectRepo()">
+        Connect
+      </button>
+      <button class="btn btn-cancel" onclick="closeRepoModal()">Cancel</button>
+    </div>
+    <div class="modal-repos" id="githubRepoList">
+      <div style="font-size:12px;color:var(--text-faint);padding:4px 0">Loading your GitHub repos…</div>
     </div>
   </div>
-
-</div><!-- /container -->
-
-<div id="toast"></div>
+</div>
 
 <script>
-  const BASE = '';
-  let currentTaskId = null;
-  let pollInterval  = null;
+/* ════════════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════════════ */
+let currentUser    = null;
+let selectedRepo   = null;
+let currentChatId  = null;
+let pollingTimer   = null;
+let isSending      = false;
 
-  /* ── Helpers ── */
-  const $ = id => document.getElementById(id);
-  function toast(msg, ms = 3000) {
-    const t = $('toast'); t.textContent = msg; t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), ms);
+const chats = JSON.parse(localStorage.getItem('cl_chats') || '{}');
+
+/* ════════════════════════════════════════════════════════
+   MARKED + HIGHLIGHT SETUP
+════════════════════════════════════════════════════════ */
+marked.setOptions({
+  highlight: (code, lang) => {
+    if (lang && hljs.getLanguage(lang)) {
+      return hljs.highlight(code, { language: lang }).value;
+    }
+    return hljs.highlightAuto(code).value;
+  },
+  breaks: true,
+  gfm: true
+});
+
+// Custom renderer for code blocks with copy button
+const renderer = new marked.Renderer();
+renderer.code = (code, lang) => {
+  const highlighted = lang && hljs.getLanguage(lang)
+    ? hljs.highlight(code, { language: lang }).value
+    : hljs.highlightAuto(code).value;
+  const id = 'cb_' + Math.random().toString(36).slice(2);
+  return `<div class="code-block">
+    <div class="code-header">
+      <span>${lang || 'code'}</span>
+      <button class="copy-btn" onclick="copyCode('${id}')">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        Copy
+      </button>
+    </div>
+    <pre><code id="${id}" class="hljs language-${lang || ''}">${highlighted}</code></pre>
+  </div>`;
+};
+marked.use({ renderer });
+
+/* ════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════ */
+async function init() {
+  try {
+    const res  = await fetch('/auth/me');
+    const data = await res.json();
+    if (data.authenticated) {
+      currentUser = data.user;
+      showApp();
+    } else {
+      document.getElementById('loginOverlay').classList.remove('hidden');
+    }
+  } catch { document.getElementById('loginOverlay').classList.remove('hidden'); }
+}
+
+function showApp() {
+  document.getElementById('loginOverlay').classList.add('hidden');
+  // User info in sidebar
+  const u = currentUser;
+  document.getElementById('sidebarUser').style.display = 'flex';
+  document.getElementById('sidebarAvatar').src   = u.photos?.[0]?.value || '';
+  document.getElementById('sidebarName').textContent   = u.displayName || u.username;
+  document.getElementById('sidebarLogin').textContent  = '@' + u.username;
+  loadConnectedRepos();
+  renderHistory();
+}
+
+/* ════════════════════════════════════════════════════════
+   THEME
+════════════════════════════════════════════════════════ */
+const savedTheme = localStorage.getItem('cl_theme') || 'dark';
+document.documentElement.setAttribute('data-theme', savedTheme);
+
+function toggleTheme() {
+  const cur  = document.documentElement.getAttribute('data-theme');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('cl_theme', next);
+}
+
+/* ════════════════════════════════════════════════════════
+   SIDEBAR MOBILE
+════════════════════════════════════════════════════════ */
+document.getElementById('menuBtn').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebarOverlay').classList.add('open');
+});
+document.getElementById('sidebarOverlay').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+});
+
+/* ════════════════════════════════════════════════════════
+   REPOS
+════════════════════════════════════════════════════════ */
+async function loadConnectedRepos() {
+  try {
+    const res  = await fetch('/api/repo/connected');
+    const data = await res.json();
+    const repos = data.repos || [];
+    renderSidebarRepos(repos);
+    if (repos.length > 0 && !selectedRepo) selectRepo(repos[0]);
+  } catch {}
+}
+
+function renderSidebarRepos(repos) {
+  const list = document.getElementById('repoList');
+  list.innerHTML = repos.map(r => `
+    <div class="repo-chip ${selectedRepo === r ? 'selected' : ''}" onclick="selectRepo('${r}')">
+      <svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+      <span class="repo-name">${r}</span>
+      ${selectedRepo === r ? '<span class="repo-dot"></span>' : ''}
+    </div>`).join('');
+}
+
+function selectRepo(repo) {
+  selectedRepo = repo;
+  document.getElementById('topbarRepoLabel').textContent   = repo;
+  document.getElementById('repoSelectorLabel').textContent = repo;
+  document.getElementById('sendBtn').disabled = !document.getElementById('chatInput').value.trim();
+  loadConnectedRepos();
+}
+
+async function openRepoModal() {
+  document.getElementById('repoModal').classList.remove('hidden');
+  try {
+    const res  = await fetch('/api/repo/list');
+    const data = await res.json();
+    const repos = data.repos || [];
+    const container = document.getElementById('githubRepoList');
+    if (!repos.length) { container.innerHTML = '<div style="font-size:12px;color:var(--text-faint)">No public repos found.</div>'; return; }
+    container.innerHTML = repos.slice(0, 20).map(r => `
+      <div class="modal-repo-item" onclick="pickRepo('${r.full_name}')">
+        <svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+        ${r.full_name}
+      </div>`).join('');
+  } catch {
+    document.getElementById('githubRepoList').innerHTML = '<div style="font-size:12px;color:var(--text-faint)">Could not load repos.</div>';
   }
-  function showResponse(data) {
-    const box = $('response');
-    box.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-    box.style.display = 'block';
+}
+
+function closeRepoModal() {
+  document.getElementById('repoModal').classList.add('hidden');
+  document.getElementById('repoInput').value = '';
+}
+
+function pickRepo(name) {
+  document.getElementById('repoInput').value = name;
+}
+
+async function connectRepo() {
+  const name = document.getElementById('repoInput').value.trim();
+  if (!name) return;
+  const btn = document.querySelector('#repoModal .btn-primary');
+  btn.textContent = 'Connecting…';
+  btn.disabled = true;
+  try {
+    const res  = await fetch('/api/repo/connect', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repoFullName: name })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      closeRepoModal();
+      selectRepo(name);
+      loadConnectedRepos();
+      addAIMessage(`✅ Connected to **${name}**. Ready to receive your instructions!`);
+    } else {
+      addAIMessage(`❌ Could not connect: ${data.error || 'Unknown error'}`);
+      closeRepoModal();
+    }
+  } catch {
+    addAIMessage('❌ Connection failed. Check your network and try again.');
+    closeRepoModal();
+  } finally { btn.textContent = 'Connect'; btn.disabled = false; }
+}
+
+// Close modal on overlay click
+document.getElementById('repoModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('repoModal')) closeRepoModal();
+});
+
+/* ════════════════════════════════════════════════════════
+   CHAT HISTORY
+════════════════════════════════════════════════════════ */
+function saveChats() {
+  localStorage.setItem('cl_chats', JSON.stringify(chats));
+}
+
+function renderHistory() {
+  const list  = document.getElementById('historyList');
+  const empty = document.getElementById('historyEmpty');
+  const ids   = Object.keys(chats).reverse();
+  if (!ids.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  list.innerHTML = ids.map(id => `
+    <div class="history-item ${id === currentChatId ? 'active' : ''}" onclick="loadChat('${id}')">
+      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      <span>${chats[id].title || 'Untitled chat'}</span>
+    </div>`).join('');
+}
+
+function newChat() {
+  currentChatId = null;
+  clearMessages();
+  document.getElementById('welcomeScreen').style.display = 'flex';
+  renderHistory();
+}
+
+function loadChat(id) {
+  if (!chats[id]) return;
+  currentChatId = id;
+  clearMessages();
+  document.getElementById('welcomeScreen').style.display = 'none';
+  const msgs = chats[id].messages || [];
+  msgs.forEach(m => {
+    if (m.role === 'user') appendUserBubble(m.content);
+    else appendAIBubble(m.content, m.html);
+  });
+  renderHistory();
+  closeSidebar();
+}
+
+function clearMessages() {
+  const msgs = document.getElementById('messages');
+  msgs.innerHTML = '<div class="welcome" id="welcomeScreen" style="display:none"></div>';
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+/* ════════════════════════════════════════════════════════
+   INPUT
+════════════════════════════════════════════════════════ */
+const chatInput = document.getElementById('chatInput');
+const sendBtn   = document.getElementById('sendBtn');
+
+chatInput.addEventListener('input', () => {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 200) + 'px';
+  sendBtn.disabled = !chatInput.value.trim() || !selectedRepo || isSending;
+});
+
+chatInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (!sendBtn.disabled) sendMessage();
   }
-  async function api(method, path, body) {
-    const opts = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
-    if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(BASE + path, opts);
-    return res.json();
+});
+
+sendBtn.addEventListener('click', sendMessage);
+document.getElementById('newChatBtn').addEventListener('click', newChat);
+document.getElementById('connectRepoBtn').addEventListener('click', openRepoModal);
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/auth/logout', { method: 'POST' });
+  location.reload();
+});
+
+function setPrompt(text) {
+  chatInput.value = text;
+  chatInput.dispatchEvent(new Event('input'));
+  chatInput.focus();
+}
+
+/* ════════════════════════════════════════════════════════
+   SEND MESSAGE / AI FLOW
+════════════════════════════════════════════════════════ */
+async function sendMessage() {
+  const instruction = chatInput.value.trim();
+  if (!instruction || !selectedRepo || isSending) return;
+
+  // Hide welcome
+  document.getElementById('welcomeScreen').style.display = 'none';
+
+  // New chat if needed
+  if (!currentChatId) {
+    currentChatId = 'chat_' + Date.now();
+    chats[currentChatId] = { title: instruction.slice(0, 40), messages: [], repo: selectedRepo };
+    saveChats();
+    renderHistory();
   }
 
-  /* ── Check auth on load ── */
-  async function checkAuth() {
+  // User bubble
+  appendUserBubble(instruction);
+  chats[currentChatId].messages.push({ role: 'user', content: instruction });
+  saveChats();
+
+  chatInput.value = '';
+  chatInput.style.height = 'auto';
+  sendBtn.disabled = true;
+  isSending = true;
+
+  // Typing indicator
+  const typingId = addTypingIndicator();
+
+  try {
+    const res  = await fetch('/api/ai/instruct', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repoFullName: selectedRepo, instruction })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      removeTypingIndicator(typingId);
+      const errMsg = `❌ **Error:** ${data.error || 'Request failed'}\n\n${data.hint ? '*' + data.hint + '*' : ''}`;
+      addAIMessage(errMsg);
+      return;
+    }
+
+    pollTask(data.taskId, typingId);
+
+  } catch (err) {
+    removeTypingIndicator(typingId);
+    addAIMessage('❌ **Network error.** Please check your connection and try again.');
+    isSending = false;
+    sendBtn.disabled = false;
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   POLLING
+════════════════════════════════════════════════════════ */
+const STATUS_LABELS = {
+  pending:           'Starting…',
+  thinking:          'Analyzing your codebase…',
+  planning:          'Planning the changes…',
+  generating:        'Writing code…',
+  awaiting_approval: 'Ready for review',
+  applying:          'Applying changes…',
+  completed:         'Changes pushed to GitHub ✓',
+  failed:            'Something went wrong',
+  rejected:          'Changes rejected'
+};
+
+function pollTask(taskId, typingId) {
+  let dots = 0;
+  pollingTimer = setInterval(async () => {
     try {
-      const data = await api('GET', '/api/status');
-      $('statusText').textContent = 'Server running — v' + data.version;
-      if (data.authenticated && data.user) {
-        $('loginBtn').style.display    = 'none';
-        $('userBadge').style.display   = 'flex';
-        $('userAvatar').src            = data.user.avatar || '';
-        $('userName').textContent      = '@' + data.user.username;
-        $('playground').style.display  = 'block';
+      const res  = await fetch(`/api/ai/task/${taskId}`);
+      const task = await res.json();
+      const label = STATUS_LABELS[task.status] || task.status;
+
+      // Update typing indicator text
+      const el = document.getElementById(typingId);
+      if (el) {
+        el.querySelector('.typing-label').textContent = label;
       }
-    } catch(e) {
-      $('statusText').textContent = 'Server unreachable';
-    }
-  }
 
-  async function logout() {
-    await api('POST', '/auth/logout');
-    location.reload();
-  }
+      if (task.status === 'awaiting_approval') {
+        clearInterval(pollingTimer);
+        removeTypingIndicator(typingId);
+        showTaskResult(task, taskId);
 
-  /* ── Repo actions ── */
-  async function connectRepo() {
-    const repo = $('repoInput').value.trim();
-    if (!repo) return toast('Enter a repo name first');
-    toast('Connecting…');
-    const d = await api('POST', '/api/repo/connect', { repoFullName: repo });
-    showResponse(d);
-    if (d.success) toast('✅ Repo connected!');
-  }
-  async function analyzeRepo() {
-    const repo = $('repoInput').value.trim();
-    if (!repo) return toast('Enter a repo name first');
-    toast('Analyzing…');
-    const d = await api('POST', '/api/repo/analyze', { repoFullName: repo });
-    showResponse(d);
-  }
-  async function listRepos() {
-    toast('Fetching repos…');
-    const d = await api('GET', '/api/repo/list');
-    showResponse(d);
-  }
+      } else if (task.status === 'completed') {
+        clearInterval(pollingTimer);
+        removeTypingIndicator(typingId);
+        addAIMessage(`✅ **Done!** Changes have been committed and pushed to **${selectedRepo}**.\n\n> ${task.result?.explanation || 'All changes applied successfully.'}`);
+        isSending = false;
+        sendBtn.disabled = !chatInput.value.trim();
 
-  /* ── AI Instruction ── */
-  async function sendInstruction() {
-    const repo = $('repoInput').value.trim();
-    const instr = $('instructionInput').value.trim();
-    if (!repo)  return toast('Enter a repo name first');
-    if (!instr) return toast('Enter an instruction first');
+      } else if (task.status === 'failed') {
+        clearInterval(pollingTimer);
+        removeTypingIndicator(typingId);
+        addAIMessage(`❌ **Failed:** ${task.error || 'An unknown error occurred.'}`);
+        isSending = false;
+        sendBtn.disabled = !chatInput.value.trim();
 
-    clearInterval(pollInterval);
-    $('approvalBtns').style.display = 'none';
-    $('planSummary').style.display  = 'none';
-
-    toast('Sending to AI…');
-    const d = await api('POST', '/api/ai/instruct', { repoFullName: repo, instruction: instr });
-    if (!d.taskId) return showResponse(d);
-
-    currentTaskId = d.taskId;
-    $('taskIdLabel').textContent = 'Task: ' + d.taskId;
-    $('taskPanel').style.display = 'block';
-    setStatus('thinking');
-    pollInterval = setInterval(pollTask, 3000);
-  }
-
-  async function pollTask() {
-    if (!currentTaskId) return;
-    const d = await api('GET', '/api/ai/task/' + currentTaskId);
-    if (!d.task) return;
-    const t = d.task;
-    setStatus(t.status);
-
-    if (t.status === 'awaiting_approval') {
-      clearInterval(pollInterval);
-      if (t.plan?.summary) {
-        $('planSummary').textContent = '📋 Plan: ' + t.plan.summary;
-        $('planSummary').style.display = 'block';
+      } else if (task.status === 'rejected') {
+        clearInterval(pollingTimer);
+        removeTypingIndicator(typingId);
+        addAIMessage('🚫 Changes were rejected.');
+        isSending = false;
+        sendBtn.disabled = !chatInput.value.trim();
       }
-      $('approvalBtns').style.display = 'block';
-      showResponse(t.changes);
-      toast('✅ AI ready — review and approve!', 5000);
+    } catch {}
+  }, 2500);
+}
+
+async function showTaskResult(task, taskId) {
+  try {
+    const res  = await fetch(`/api/changes/${taskId}`);
+    const data = await res.json();
+    const result = data.task?.result || task.result || {};
+
+    let md = `### ✦ Plan Summary\n${result.explanation || result.summary || 'AI has generated the following changes:'}\n\n`;
+
+    const changes = result.changes || [];
+    if (changes.length) {
+      md += `**${changes.length} file${changes.length > 1 ? 's' : ''} to be changed:**\n`;
+      changes.forEach(c => { md += `- \`${c.path}\` — ${c.description || c.action}\n`; });
     }
-    if (t.status === 'completed') {
-      clearInterval(pollInterval);
-      showResponse(t.appliedChanges);
-      toast('🎉 Changes pushed to GitHub!', 5000);
+
+    const msgEl = addAIMessage(md);
+
+    // Diff blocks
+    if (changes.length) {
+      const bubble = msgEl.querySelector('.bubble.ai .ai-content');
+      const diffWrapper = document.createElement('div');
+      changes.slice(0, 5).forEach(c => {
+        const block = document.createElement('div');
+        block.className = 'diff-block';
+        block.innerHTML = `
+          <div class="diff-header">
+            <span class="diff-filename">${c.path}</span>
+            <span class="diff-action ${c.action}">${c.action}</span>
+          </div>
+          <div class="diff-body">
+            <pre>${escapeHtml((c.content || '').slice(0, 1500))}${c.content?.length > 1500 ? '\n… (truncated)' : ''}</pre>
+          </div>`;
+        diffWrapper.appendChild(block);
+      });
+      bubble.appendChild(diffWrapper);
     }
-    if (t.status === 'failed') {
-      clearInterval(pollInterval);
-      showResponse({ error: t.error });
-      toast('❌ Task failed: ' + t.error, 6000);
+
+    // Action buttons
+    const bubble = msgEl.querySelector('.bubble.ai .ai-content');
+    const row = document.createElement('div');
+    row.className = 'action-row';
+    row.id = `actions_${taskId}`;
+    row.innerHTML = `
+      <button class="btn btn-approve" onclick="approveTask('${taskId}')">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        Approve & push to GitHub
+      </button>
+      <button class="btn btn-reject" onclick="rejectTask('${taskId}')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Reject
+      </button>`;
+    bubble.appendChild(row);
+    scrollToBottom();
+
+  } catch {
+    addAIMessage('⚠️ Could not load the diff preview. Try approving directly.');
+  }
+  isSending = false;
+  sendBtn.disabled = !chatInput.value.trim();
+}
+
+async function approveTask(taskId) {
+  const row = document.getElementById(`actions_${taskId}`);
+  if (row) row.innerHTML = `<span class="status-badge generating"><span class="pulse"></span> Applying changes…</span>`;
+
+  try {
+    const res  = await fetch(`/api/changes/${taskId}/approve`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      if (row) row.innerHTML = `<span class="status-badge completed"><span class="pulse"></span> Pushed to GitHub ✓</span>`;
+      addAIMessage(`🎉 **Success!** Changes committed and pushed to **${selectedRepo}**.\n\nCommit: \`${data.commitSha?.slice(0, 7) || 'done'}\``);
+    } else {
+      if (row) row.innerHTML = `<span class="status-badge failed">❌ Apply failed</span>`;
+      addAIMessage(`❌ **Apply failed:** ${data.error || 'Unknown error'}`);
     }
+  } catch {
+    if (row) row.innerHTML = `<span class="status-badge failed">❌ Network error</span>`;
   }
+}
 
-  function setStatus(s) {
-    const b = $('statusBadge');
-    b.className = 'status-badge s-' + s;
-    const icons = { pending:'⏳', thinking:'🧠', planning:'📋', generating:'⚙️', awaiting_approval:'👀', applying:'🚀', completed:'✅', failed:'❌', rejected:'🚫' };
-    b.textContent = (icons[s] || '') + ' ' + s;
-  }
+async function rejectTask(taskId) {
+  const row = document.getElementById(`actions_${taskId}`);
+  try {
+    await fetch(`/api/changes/${taskId}/reject`, { method: 'POST' });
+    if (row) row.innerHTML = `<span class="status-badge rejected">Rejected</span>`;
+    addAIMessage('🚫 Changes rejected. Feel free to refine your instruction and try again.');
+  } catch {}
+}
 
-  async function approveChanges() {
-    if (!currentTaskId) return;
-    toast('Applying changes…');
-    const d = await api('POST', '/api/changes/' + currentTaskId + '/approve');
-    showResponse(d);
-    setStatus('completed');
-    $('approvalBtns').style.display = 'none';
-    if (d.success) toast('🎉 Pushed to GitHub: ' + d.commitMessage, 6000);
-  }
-  async function rejectChanges() {
-    if (!currentTaskId) return;
-    await api('POST', '/api/changes/' + currentTaskId + '/reject');
-    setStatus('rejected');
-    $('approvalBtns').style.display = 'none';
-    toast('Changes rejected.');
-  }
-  async function viewDiff() {
-    if (!currentTaskId) return;
-    const d = await api('GET', '/api/changes/' + currentTaskId);
-    showResponse(d);
-  }
+/* ════════════════════════════════════════════════════════
+   MESSAGE HELPERS
+════════════════════════════════════════════════════════ */
+function appendUserBubble(text) {
+  const msgs = document.getElementById('messages');
+  const row  = document.createElement('div');
+  row.className = 'message-row user';
+  row.innerHTML = `<div class="bubble user">${escapeHtml(text)}</div>`;
+  msgs.appendChild(row);
+  scrollToBottom();
+}
 
-  async function explainFile() {
-    const repo = $('repoInput').value.trim();
-    const fp   = $('filePathInput').value.trim();
-    if (!repo || !fp) return toast('Enter repo and file path first');
-    toast('Explaining…');
-    const d = await api('POST', '/api/ai/explain', { repoFullName: repo, filePath: fp });
-    showResponse(d);
-  }
+function appendAIBubble(text, html) {
+  const msgs = document.getElementById('messages');
+  const row  = document.createElement('div');
+  row.className = 'message-row ai';
+  const rendered = html || marked.parse(text || '');
+  row.innerHTML = `
+    <div class="ai-avatar">✦</div>
+    <div class="bubble ai"><div class="ai-content">${rendered}</div></div>`;
+  msgs.appendChild(row);
+  scrollToBottom();
+  return row;
+}
 
-  checkAuth();
+function addAIMessage(markdown) {
+  const el = appendAIBubble(markdown);
+  if (currentChatId && chats[currentChatId]) {
+    chats[currentChatId].messages.push({ role: 'ai', content: markdown });
+    saveChats();
+  }
+  return el;
+}
+
+function addTypingIndicator() {
+  const id   = 'typing_' + Date.now();
+  const msgs = document.getElementById('messages');
+  const row  = document.createElement('div');
+  row.id = id;
+  row.className = 'message-row ai';
+  row.innerHTML = `
+    <div class="ai-avatar">✦</div>
+    <div class="bubble ai">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="typing-indicator"><span></span><span></span><span></span></div>
+        <span class="typing-label" style="font-size:13px;color:var(--text-muted)">Analyzing your codebase…</span>
+      </div>
+    </div>`;
+  msgs.appendChild(row);
+  scrollToBottom();
+  return id;
+}
+
+function removeTypingIndicator(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+function scrollToBottom() {
+  const msgs = document.getElementById('messages');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function copyCode(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).catch(() => {});
+}
+
+/* ════════════════════════════════════════════════════════
+   START
+════════════════════════════════════════════════════════ */
+init();
 </script>
 </body>
 </html>
