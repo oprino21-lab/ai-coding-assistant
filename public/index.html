@@ -1121,8 +1121,9 @@ function pollTask(taskId, typingId) {
   pollingTimer = setInterval(async () => {
     try {
       const res  = await fetch(`/api/ai/task/${taskId}`);
-      const task = await res.json();
-      const label = STATUS_LABELS[task.status] || task.status;
+      const data = await res.json();
+      const task = data.task || data;
+      const label = STATUS_LABELS[task.status] || task.status || '…';
 
       // Update typing indicator text
       const el = document.getElementById(typingId);
@@ -1138,7 +1139,7 @@ function pollTask(taskId, typingId) {
       } else if (task.status === 'completed') {
         clearInterval(pollingTimer);
         removeTypingIndicator(typingId);
-        addAIMessage(`✅ **Done!** Changes have been committed and pushed to **${selectedRepo}**.\n\n> ${task.result?.explanation || 'All changes applied successfully.'}`);
+        addAIMessage(`✅ **Done!** Changes committed and pushed to **${selectedRepo}**.`);
         isSending = false;
         sendBtn.disabled = !chatInput.value.trim();
 
@@ -1152,7 +1153,7 @@ function pollTask(taskId, typingId) {
       } else if (task.status === 'rejected') {
         clearInterval(pollingTimer);
         removeTypingIndicator(typingId);
-        addAIMessage('🚫 Changes were rejected.');
+        addAIMessage('🚫 Changes rejected.');
         isSending = false;
         sendBtn.disabled = !chatInput.value.trim();
       }
