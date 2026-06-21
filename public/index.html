@@ -1185,12 +1185,26 @@ async function showTaskResult(task, taskId) {
     }
 
     const changes = result.changes || [];
-    const explanation = result.explanation || result.summary || 'AI has generated the following changes.';
+    const report  = taskData?.structuredReport || {};
 
-    let md = `### ✦ Plan Complete\n${explanation}\n\n`;
+    // Problem found — prefer structuredReport.problemStatement, fallback to result.problemFound
+    const problemFound = report.problemStatement || result.problemFound || '';
+    // What was fixed — prefer result.explanation, fallback to report summary
+    const whatWasFixed = result.explanation || report.explanation || '';
+
+    let md = `### ✦ Analysis Complete\n\n`;
+    if (problemFound) {
+      md += `**🔍 Problem found:**\n${problemFound}\n\n`;
+    }
+    if (whatWasFixed) {
+      md += `**✅ What was fixed:**\n${whatWasFixed}\n\n`;
+    }
     if (changes.length) {
-      md += `**${changes.length} file${changes.length > 1 ? 's' : ''} ready for review:**\n`;
-      changes.forEach(c => { md += `- \`${c.path}\` — ${c.description || c.action}\n`; });
+      md += `**📂 ${changes.length} file${changes.length > 1 ? 's' : ''} changed:**\n`;
+      changes.forEach(c => {
+        const badge = c.action === 'create' ? '🆕' : '✏️';
+        md += `- ${badge} \`${c.path}\` — ${c.description || c.action}\n`;
+      });
     }
 
     const msgEl = addAIMessage(md);

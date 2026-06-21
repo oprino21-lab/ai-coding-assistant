@@ -272,12 +272,14 @@ async function thinkAndPlan(instruction, repoAnalysis, deepContext = {}, searchR
     {
       role: 'system',
       content: `You are a senior software engineer acting as an autonomous coding agent — like Replit Agent.
-RULES:
-1. You MUST read and understand the full existing implementation before planning.
-2. You MUST reuse existing patterns, naming conventions, and architecture.
-3. You MUST only plan modifications to EXISTING files unless a new file is absolutely required.
-4. You MUST NOT introduce placeholder values, dummy data, or fake configurations.
-5. Your plan must be specific: name exact files, exact functions, exact lines of concern.
+RULES — follow all without exception:
+1. READ the existing code carefully. Understand it fully before planning anything.
+2. ALWAYS prefer editing existing files. Only add a file to "newFiles" if it genuinely cannot be done inside an existing file.
+3. If the user says "fix X", find where X is implemented and fix it there. Do NOT create a new file for the same thing.
+4. If the user says "create a file", put it in "newFiles". Otherwise assume the code already exists somewhere.
+5. "existingImplementation" must describe exactly how the relevant code currently works — not generic text.
+6. Never plan placeholder code, dummy values, or TODO comments.
+7. "problemStatement" must be specific: name the exact file, function, and what is wrong.
 Respond ONLY with valid JSON — no markdown, no extra text.`
     },
     {
@@ -390,13 +392,15 @@ async function generateCodeChanges(instruction, plan, repoAnalysis, existingCont
     {
       role: 'system',
       content: `You are a senior software engineer acting as an autonomous coding agent — like Replit Agent.
-STRICT RULES:
+STRICT RULES — follow all of them without exception:
 1. Generate COMPLETE, production-ready file contents — never truncate with "// rest of code here" or similar.
 2. NEVER use placeholder values: no "YOUR_API_KEY", no "example.com", no "TODO", no fake URLs.
-3. ONLY modify files that exist in the codebase. Do not create new files unless the plan explicitly requires it.
-4. Preserve ALL existing functionality that is not part of the instruction — do not remove unrelated code.
-5. Follow the exact same coding style, naming conventions, and patterns as the existing files.
-6. If modifying a file, include the FULL updated file content, not just the changed section.
+3. EDITING EXISTING FILES: If a file is marked "EXISTING" in the context below, you MUST edit it in-place. Do NOT create a replacement. Include the FULL updated file content.
+4. CREATING NEW FILES: Only create a new file if it is listed as "NEW FILE" in the context, or the user's instruction explicitly says to create a specific file.
+5. Preserve ALL existing functionality that is not part of the instruction — do not remove unrelated code.
+6. Follow the exact same coding style, naming conventions, and patterns as the existing files.
+7. Your "description" field for each change must clearly state: what the bug/problem was, and exactly what you changed to fix it.
+8. Your "explanation" field must answer: "What was wrong?" and "What did I fix?" in plain language the user can understand.
 Respond ONLY with valid JSON — no markdown fences, no extra text.`
     },
     {
@@ -404,32 +408,36 @@ Respond ONLY with valid JSON — no markdown fences, no extra text.`
       content: `## User Instruction
 "${instruction}"
 
-## Problem Statement
+## Problem Found
 ${plan.problemStatement || instruction}
 
-## Implementation Plan
+## Existing Implementation
+${plan.existingImplementation || '(see file contents below)'}
+
+## Step-by-Step Fix Plan
 ${steps.join('\n') || '(no steps)'}
 
-## Existing File Contents (COMPLETE — use these as your base)
+## File Contents (COMPLETE — modify these in-place, do not recreate from scratch)
 ${existingCode}
 
 ## Tech Stack
 ${detected.join(', ') || 'Unknown'}
 
 ## Task
-Generate the code changes. Each change must include the COMPLETE updated file content.
+Fix the problem by editing the existing files. Write COMPLETE file contents.
 Respond ONLY with:
 {
   "changes": [
     {
       "path": "relative/path/to/file",
-      "action": "modify or create",
+      "action": "modify (for existing files) or create (for brand-new files only)",
       "content": "COMPLETE file content — never truncated",
-      "description": "what was changed and why, referencing the specific existing code that was modified"
+      "description": "Bug found: [describe the specific problem in the existing code]. Fix applied: [describe exactly what was changed]"
     }
   ],
-  "commitMessage": "type(scope): short description",
-  "explanation": "overall summary of all changes made and how they integrate with the existing codebase"
+  "commitMessage": "fix(scope): short description of what was broken and how it was fixed",
+  "explanation": "What was wrong: [clear explanation]. What was fixed: [clear explanation of the changes made and why they solve the problem].",
+  "problemFound": "${(plan.problemStatement || instruction).replace(/"/g, '\\"')}"
 }`
     }
   ];
@@ -441,6 +449,15 @@ Respond ONLY with:
     logger.error(`generateCodeChanges: parse failed. Raw (first 800 chars): ${String(raw).substring(0, 800)}`);
     throw new Error('AI did not return valid code changes. Please rephrase your instruction and try again.');
   }
+
+  // Programmatically correct the action field — if the file exists in the tree it MUST be "modify".
+  // This overrides any AI mistake; we never let the AI "create" a file that already exists.
+  const fileTreeSet = new Set(fileTree);
+  result.changes.forEach(change => {
+    if (change.path) {
+      change.action = fileTreeSet.has(change.path) ? 'modify' : 'create';
+    }
+  });
 
   logger.info(`Generated ${result.changes.length} file change(s)`);
   return { result, usage };
