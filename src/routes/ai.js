@@ -62,10 +62,13 @@ router.post('/instruct', requireAuth, async (req, res) => {
         updateTask(task.id, { status: phase, ...extra });
       }
 
-      /* Run the full agentic loop: read → plan → execute → self-debug */
+      /* Run the full agentic loop: search → read → plan → execute → self-debug */
       const {
         plan,
         changes,
+        notFound,
+        notFoundMessage,
+        suggestion,
         agentLog,
         structuredReport,
         debugAttempts,
@@ -77,6 +80,21 @@ router.post('/instruct', requireAuth, async (req, res) => {
         getFilesContent,
         onProgress
       );
+
+      /* Feature does not exist in codebase — inform user instead of generating broken code */
+      if (notFound) {
+        updateTask(task.id, {
+          status:          'not_found',
+          plan,
+          agentLog,
+          structuredReport,
+          tokenUsage,
+          notFoundMessage,
+          suggestion
+        });
+        logger.info(`Task ${task.id}: not_found — ${notFoundMessage}`);
+        return;
+      }
 
       updateTask(task.id, {
         status:           'awaiting_approval',

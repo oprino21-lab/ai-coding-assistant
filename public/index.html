@@ -1106,10 +1106,11 @@ async function sendMessage() {
 ════════════════════════════════════════════════════════ */
 const STATUS_LABELS = {
   pending:           'Starting…',
-  thinking:          'Reading your codebase…',
+  thinking:          'Searching your codebase…',
   planning:          'Planning the changes…',
   generating:        'Writing code…',
   debugging:         'Self-reviewing code quality…',
+  not_found:         'Feature not found in codebase',
   awaiting_approval: 'Ready for review',
   applying:          'Applying changes…',
   completed:         'Changes pushed to GitHub ✓',
@@ -1155,6 +1156,15 @@ function pollTask(taskId, typingId) {
         clearInterval(pollingTimer);
         removeTypingIndicator(typingId);
         addAIMessage('🚫 Changes rejected.');
+        isSending = false;
+        sendBtn.disabled = !chatInput.value.trim();
+
+      } else if (task.status === 'not_found') {
+        clearInterval(pollingTimer);
+        removeTypingIndicator(typingId);
+        const msg  = task.notFoundMessage || 'No relevant code was found in this repository for that instruction.';
+        const sugg = task.suggestion      ? `\n\n💡 **Suggestion:** ${task.suggestion}` : '';
+        addAIMessage(`🔍 **Not found in codebase.**\n\n${msg}${sugg}`);
         isSending = false;
         sendBtn.disabled = !chatInput.value.trim();
       }

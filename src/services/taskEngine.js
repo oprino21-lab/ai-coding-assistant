@@ -19,6 +19,8 @@ function createTask(userId, repoFullName, instruction) {
     debugAttempts:    0,
     structuredReport: null,
     tokenUsage:       null,
+    notFoundMessage:  null,
+    suggestion:       null,
     createdAt:        new Date().toISOString(),
     updatedAt:        new Date().toISOString()
   };
