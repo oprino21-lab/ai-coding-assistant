@@ -1,4 +1,4 @@
-modules = ["nodejs-20"]
+modules = ["web", "nodejs-18", "python-3.12", "bash"]
 [agent]
 expertMode = true
 stack = "BEST_EFFORT_FALLBACK"
@@ -10,7 +10,7 @@ channel = "stable-25_05"
 
 [userenv.shared]
 GITHUB_CLIENT_ID = "Ov23liMc4XjF0bHsYEhl"
-GITHUB_CALLBACK_URL = "https://ai-coding-assistant-85u2.onrender.com/auth/github/callback"
+GITHUB_CALLBACK_URL = "https://5172312a-a50e-4f15-8750-bd23ae2cca3a-00-3dh1vnxa6606g.pike.replit.dev/auth/github/callback"
 PORT = "5000"
 NODE_ENV = "development"
 
