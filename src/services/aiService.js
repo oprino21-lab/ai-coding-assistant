@@ -215,13 +215,36 @@ async function generateCodeChanges(instruction, plan, repoAnalysis, existingCont
   logger.info('Agent Phase 3: Generating code changes...');
 
   const detected = Array.isArray(repoAnalysis?.techStack?.detected) ? repoAnalysis.techStack.detected : [];
+  const fileTree  = Array.isArray(repoAnalysis?.fileTree) ? repoAnalysis.fileTree : [];
   const steps = toStringArray(plan.steps);
   const impacted = toStringArray(plan.impactedFiles);
   const newFiles = toStringArray(plan.newFiles);
   const filesToChange = [...impacted, ...newFiles];
 
-  const existingCode = filesToChange
-    .map(f => `=== ${f} (${existingContents[f] ? 'EXISTING — modify this' : 'NEW FILE — create this'}) ===\n${existingContents[f] || '[create new file]'}`)
+  // Guard: if no files planned AND no context at all, we cannot generate safely
+  if (filesToChange.length === 0 && Object.keys(existingContents).length === 0) {
+    throw new Error(
+      'Agent could not identify which files to modify. ' +
+      'Please be more specific about which file or feature to change.'
+    );
+  }
+
+  // Build existing code section — include everything in existingContents (merged context from Phase 1+3)
+  const allContextFiles = filesToChange.length > 0
+    ? [...new Set([...filesToChange, ...Object.keys(existingContents)])]
+    : Object.keys(existingContents);
+
+  const existingCode = allContextFiles
+    .map(f => {
+      const inFileTree = fileTree.includes(f);
+      const isPlanned  = filesToChange.includes(f);
+      const label = !inFileTree
+        ? 'NEW FILE — create this'
+        : isPlanned
+          ? 'EXISTING — modify this'
+          : 'EXISTING — context only, do not modify unless required';
+      return `=== ${f} (${label}) ===\n${existingContents[f] || '[create new file]'}`;
+    })
     .join('\n\n') || '(no existing files provided)';
 
   const messages = [
@@ -285,6 +308,41 @@ Respond ONLY with:
 }
 
 /**
+ * Programmatic placeholder detector — fast, deterministic, zero-token-cost.
+ * Scans generated file contents for known bad patterns before sending to AI review.
+ */
+function detectPlaceholders(changes) {
+  const PLACEHOLDER_PATTERNS = [
+    /YOUR_API_KEY/i,
+    /YOUR_SECRET/i,
+    /REPLACE_ME/i,
+    /example\.com/i,
+    /localhost:3000(?!\s*[,;)\]}])/,  // localhost:3000 when it's not part of a config default
+    /dummy[_\s-]?(key|token|value|data|url)/i,
+    /fake[_\s-]?(key|token|value|data|url)/i,
+    /\bTODO\b/,
+    /\bFIXME\b/,
+    /\/\/ ?\.\.\. ?rest of (the )?code/i,
+    /\/\/ ?(existing|rest|other) code (here|goes here)/i,
+    /\/\* ?(existing|rest|other|previous) code \*\//i,
+    /\[your[_\s-]?\w+\]/i,
+    /INSERT_\w+_HERE/i,
+  ];
+
+  const found = [];
+  for (const change of changes) {
+    const content = change.content || '';
+    for (const pattern of PLACEHOLDER_PATTERNS) {
+      if (pattern.test(content)) {
+        found.push(`${change.path}: matched pattern /${pattern.source}/i`);
+        break;
+      }
+    }
+  }
+  return found;
+}
+
+/**
  * PHASE 4 — Self-debugging.
  * Reviews the generated changes against the original codebase and instruction.
  * Detects: placeholders, truncated code, broken imports, missing logic, style violations.
@@ -293,7 +351,20 @@ Respond ONLY with:
 async function selfDebug(instruction, plan, generatedChanges, existingContents, attemptNumber) {
   logger.info(`Agent Phase 4: Self-debugging (attempt ${attemptNumber})...`);
 
-  const changesJson = JSON.stringify(generatedChanges.changes, null, 2);
+  // Trim file contents in the review prompt to avoid token-limit truncation.
+  // The actual full-content changes are kept separately in generatedChanges.
+  const REVIEW_CONTENT_LIMIT = 2500;
+  const trimmedChanges = generatedChanges.changes.map(c => ({
+    path:        c.path,
+    action:      c.action,
+    description: c.description,
+    content:     c.content
+      ? c.content.substring(0, REVIEW_CONTENT_LIMIT) +
+        (c.content.length > REVIEW_CONTENT_LIMIT ? '\n...[remaining content truncated for review — full content is present in the actual change]' : '')
+      : ''
+  }));
+
+  const changesJson = JSON.stringify(trimmedChanges, null, 2);
   const existingCode = Object.entries(existingContents)
     .map(([f, c]) => `=== ORIGINAL: ${f} ===\n${String(c).substring(0, 2000)}`)
     .join('\n\n');
@@ -383,9 +454,17 @@ async function runAgentLoop(instruction, repoAnalysis, localPath, getFilesConten
   addLog('READING', 'Scanning codebase to identify relevant files...');
   onProgress && onProgress('thinking', { agentLog });
 
-  const { files: relevantFiles, reasoning: readReasoning, usage: readUsage } = await identifyRelevantFiles(instruction, repoAnalysis);
+  const { files: rawRelevantFiles, reasoning: readReasoning, usage: readUsage } = await identifyRelevantFiles(instruction, repoAnalysis);
   accumulateUsage(readUsage);
-  addLog('READING', `Identified ${relevantFiles.length} relevant files: ${relevantFiles.join(', ')}`);
+
+  // Validate returned paths against the real file tree to prevent phantom file reads
+  const fileTreeSet = new Set(Array.isArray(repoAnalysis?.fileTree) ? repoAnalysis.fileTree : []);
+  const relevantFiles = rawRelevantFiles.filter(f => {
+    const valid = fileTreeSet.has(f);
+    if (!valid) logger.warn(`[Agent] Phase 1 returned non-existent path, skipping: ${f}`);
+    return valid;
+  });
+  addLog('READING', `Identified ${relevantFiles.length} valid files to read: ${relevantFiles.join(', ')}`);
 
   const deepContext = relevantFiles.length > 0
     ? await getFilesContent(relevantFiles)
@@ -405,10 +484,15 @@ async function runAgentLoop(instruction, repoAnalysis, localPath, getFilesConten
   addLog('EXECUTING', 'Generating code changes based on plan and existing code...');
   onProgress && onProgress('generating', { agentLog, plan });
 
+  // Fetch files the plan identified, then MERGE with Phase 1 deepContext so execution
+  // always has the full picture — Phase 1 understanding is never discarded.
   const allFilesToRead = [...(plan.impactedFiles || []), ...(plan.newFiles || [])];
-  const existingContents = allFilesToRead.length > 0
+  const planContents = allFilesToRead.length > 0
     ? await getFilesContent(allFilesToRead)
     : {};
+  // deepContext (Phase 1) provides background; planContents (Phase 3) are the targets.
+  // planContents wins on key conflicts so the latest read is authoritative.
+  const existingContents = { ...deepContext, ...planContents };
 
   const { result: codeChanges, usage: genUsage } = await generateCodeChanges(instruction, plan, repoAnalysis, existingContents);
   accumulateUsage(genUsage);
@@ -419,9 +503,18 @@ async function runAgentLoop(instruction, repoAnalysis, localPath, getFilesConten
   let debugAttempts = 0;
   let allIssues = [];
 
+  // Run programmatic placeholder check first — fast, deterministic, zero token cost
+  const placeholderHits = detectPlaceholders(finalChanges.changes);
+  if (placeholderHits.length > 0) {
+    addLog('DEBUGGING', `Programmatic scan found placeholder patterns: ${placeholderHits.join(' | ')}`);
+    allIssues.push(...placeholderHits);
+  } else {
+    addLog('DEBUGGING', 'Programmatic placeholder scan: CLEAN');
+  }
+
   for (let attempt = 1; attempt <= MAX_DEBUG_ATTEMPTS; attempt++) {
     debugAttempts = attempt;
-    addLog('DEBUGGING', `Running self-debug check (attempt ${attempt}/${MAX_DEBUG_ATTEMPTS})...`);
+    addLog('DEBUGGING', `Running AI self-debug review (attempt ${attempt}/${MAX_DEBUG_ATTEMPTS})...`);
     onProgress && onProgress('debugging', { agentLog, plan, debugAttempts });
 
     const { result: debugResult, usage: debugUsage } = await selfDebug(
@@ -440,9 +533,13 @@ async function runAgentLoop(instruction, repoAnalysis, localPath, getFilesConten
     }
 
     addLog('DEBUGGING', `Issues found — applying fixes: ${issues.join('; ')}`);
+    // fixedChanges from AI review contain only trimmed content — preserve full content
+    // for any change the AI didn't actually fix (keep original full-content version)
+    const fixedPaths = new Set(debugResult.fixedChanges.map(c => c.path));
+    const unfixedOriginals = finalChanges.changes.filter(c => !fixedPaths.has(c.path));
     finalChanges = {
       ...finalChanges,
-      changes: debugResult.fixedChanges
+      changes: [...debugResult.fixedChanges, ...unfixedOriginals]
     };
 
     if (attempt === MAX_DEBUG_ATTEMPTS) {
@@ -452,12 +549,14 @@ async function runAgentLoop(instruction, repoAnalysis, localPath, getFilesConten
 
   /* ── Structured report ── */
   const structuredReport = {
-    problemsFound:       [plan.problemStatement, ...allIssues.filter(Boolean)],
-    planFollowed:        plan.steps,
+    problemStatement:    plan.problemStatement,
     existingImplSummary: plan.existingImplementation,
+    planFollowed:        plan.steps,
+    risks:               plan.risks,
     filesModified:       finalChanges.changes.map(c => ({ path: c.path, action: c.action, description: c.description })),
     debugAttempts,
-    issuesCorrected:     allIssues,
+    issuesCorrected:     allIssues.filter(Boolean),
+    placeholderHits,
     finalStatus:         'awaiting_approval',
     commitMessage:       finalChanges.commitMessage,
     explanation:         finalChanges.explanation
