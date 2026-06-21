@@ -11,17 +11,20 @@ function getClient() {
 }
 
 async function callOpenAI(messages, options = {}) {
-  const { maxTokens = 4096, temperature = 0.2 } = options;
+  const { maxTokens = 4096, temperature = 0.2, jsonMode = false } = options;
   const client = getClient();
-  logger.info(`Calling OpenAI model: ${MODEL}`);
+  logger.info(`Calling OpenAI model: ${MODEL}${jsonMode ? ' [json_object mode]' : ''}`);
 
   try {
-    const response = await client.chat.completions.create({
+    const params = {
       model: MODEL,
       messages,
       max_tokens: maxTokens,
       temperature
-    });
+    };
+    if (jsonMode) params.response_format = { type: 'json_object' };
+
+    const response = await client.chat.completions.create(params);
     const content = response.choices?.[0]?.message?.content;
     if (!content) throw new Error('OpenAI returned an empty response');
     const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
@@ -37,12 +40,34 @@ async function callOpenAI(messages, options = {}) {
 }
 
 function parseJSON(raw, fallback) {
+  if (!raw || typeof raw !== 'string') return fallback;
+
+  // Strategy 1: strip markdown fences then direct parse
+  const stripped = raw
+    .replace(/^```(?:json)?\s*/im, '')
+    .replace(/\s*```\s*$/im, '')
+    .trim();
+  try { return JSON.parse(stripped); } catch (_) {}
+
+  // Strategy 2: extract first {...} block (handles leading/trailing text)
   try {
-    const match = raw.match(/\{[\s\S]*\}/);
-    return JSON.parse(match ? match[0] : raw);
-  } catch (_) {
-    return fallback;
-  }
+    const obj = stripped.match(/\{[\s\S]*\}/);
+    if (obj) return JSON.parse(obj[0]);
+  } catch (_) {}
+
+  // Strategy 3: find the LAST complete JSON object in case there's preamble
+  try {
+    const all = [...stripped.matchAll(/\{[\s\S]*?\}/g)];
+    for (let i = all.length - 1; i >= 0; i--) {
+      try { return JSON.parse(all[i][0]); } catch (_) {}
+    }
+  } catch (_) {}
+
+  // Strategy 4: try the raw string without any modifications
+  try { return JSON.parse(raw); } catch (_) {}
+
+  logger.warn(`parseJSON: all strategies failed. Raw response (first 500 chars): ${raw.substring(0, 500)}`);
+  return fallback;
 }
 
 function toStringArray(val) {
@@ -93,7 +118,7 @@ Respond ONLY with:
     }
   ];
 
-  const { content: raw, usage } = await callOpenAI(messages, { temperature: 0.1, maxTokens: 1000 });
+  const { content: raw, usage } = await callOpenAI(messages, { temperature: 0.1, maxTokens: 1000, jsonMode: true });
   const result = parseJSON(raw, { relevantFiles: [], reasoning: '' });
 
   const files = toStringArray(result.relevantFiles).slice(0, 20);
@@ -160,7 +185,7 @@ ${deepContextSummary || '(no files read yet)'}
     }
   ];
 
-  const { content: raw, usage } = await callOpenAI(messages, { temperature: 0.1, maxTokens: 2500 });
+  const { content: raw, usage } = await callOpenAI(messages, { temperature: 0.1, maxTokens: 2500, jsonMode: true });
   const plan = parseJSON(raw, {
     problemStatement: instruction,
     existingImplementation: '',
@@ -247,10 +272,11 @@ Respond ONLY with:
     }
   ];
 
-  const { content: raw, usage } = await callOpenAI(messages, { temperature: 0.1, maxTokens: 8000 });
+  const { content: raw, usage } = await callOpenAI(messages, { temperature: 0.1, maxTokens: 8000, jsonMode: true });
   const result = parseJSON(raw, null);
 
   if (!result || !Array.isArray(result.changes) || result.changes.length === 0) {
+    logger.error(`generateCodeChanges: parse failed. Raw (first 800 chars): ${String(raw).substring(0, 800)}`);
     throw new Error('AI did not return valid code changes. Please rephrase your instruction and try again.');
   }
 
@@ -320,7 +346,7 @@ Review the generated changes. Respond ONLY with:
     }
   ];
 
-  const { content: raw, usage } = await callOpenAI(messages, { temperature: 0.05, maxTokens: 8000 });
+  const { content: raw, usage } = await callOpenAI(messages, { temperature: 0.05, maxTokens: 8000, jsonMode: true });
   const result = parseJSON(raw, { valid: true, issuesFound: [], verdict: 'PASS (parse fallback)', fixedChanges: [] });
 
   logger.info(`Self-debug attempt ${attemptNumber}: ${result.verdict || (result.valid ? 'PASS' : 'FAIL')}`);
