@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
-const { thinkAndPlan, generateCodeChanges, explainCode } = require('../services/aiService');
+const { runAgentLoop, explainCode } = require('../services/aiService');
 const { analyzeRepo } = require('../services/repoAnalyzer');
 const { createTask, updateTask, getTask } = require('../services/taskEngine');
 const githubService = require('../services/githubService');
@@ -37,47 +37,66 @@ router.post('/instruct', requireAuth, async (req, res) => {
   const task = createTask(req.user.id, repoFullName, instruction);
 
   res.json({
-    success: true,
-    taskId: task.id,
-    message: 'Task created. AI is now thinking and planning...',
-    status: 'processing'
+    success:  true,
+    taskId:   task.id,
+    message:  'Task created. Agent is reading the codebase and forming a plan...',
+    status:   'processing'
   });
 
   setImmediate(async () => {
     try {
-      updateTask(task.id, { status: 'thinking' });
+      /* Ensure repo is cloned and analyzed */
+      updateTask(task.id, { status: 'thinking', agentLog: [{ phase: 'INIT', message: 'Agent starting — cloning/updating repo...', timestamp: new Date().toISOString() }] });
 
       const conn = await getOrConnectRepo(
         req.user.id, req.user.username, req.user.accessToken, repoFullName
       );
 
-      const { plan, usage: planUsage } = await thinkAndPlan(instruction, conn.analysis);
-      updateTask(task.id, { status: 'planning', plan });
+      /* Helper passed into the agent loop so it can read files from the local clone */
+      async function getFilesContent(filePaths) {
+        return githubService.getFilesContent(conn.localPath, filePaths, 8000);
+      }
 
-      const allFilesToRead = [...(plan.impactedFiles || []), ...(plan.newFiles || [])];
-      const existingContents = allFilesToRead.length > 0
-        ? await githubService.getFilesContent(conn.localPath, plan.impactedFiles || [])
-        : {};
+      /* Progress callback — keeps the task status and agentLog live while the loop runs */
+      function onProgress(phase, extra = {}) {
+        updateTask(task.id, { status: phase, ...extra });
+      }
 
-      updateTask(task.id, { status: 'generating' });
-      const { result: codeChanges, usage: genUsage } = await generateCodeChanges(instruction, plan, conn.analysis, existingContents);
-
-      const tokenUsage = {
-        promptTokens:     (planUsage?.prompt_tokens     || 0) + (genUsage?.prompt_tokens     || 0),
-        completionTokens: (planUsage?.completion_tokens || 0) + (genUsage?.completion_tokens || 0),
-        totalTokens:      (planUsage?.total_tokens      || 0) + (genUsage?.total_tokens      || 0)
-      };
+      /* Run the full agentic loop: read → plan → execute → self-debug */
+      const {
+        plan,
+        changes,
+        agentLog,
+        structuredReport,
+        debugAttempts,
+        tokenUsage
+      } = await runAgentLoop(
+        instruction,
+        conn.analysis,
+        conn.localPath,
+        getFilesContent,
+        onProgress
+      );
 
       updateTask(task.id, {
-        status: 'awaiting_approval',
+        status:           'awaiting_approval',
         plan,
-        changes: codeChanges,
+        changes,
+        agentLog,
+        structuredReport,
+        debugAttempts,
         tokenUsage
       });
 
-      logger.info(`Task ${task.id} ready for approval: ${codeChanges.changes?.length} change(s) | tokens: ${tokenUsage.totalTokens}`);
+      logger.info(
+        `Task ${task.id} ready for approval | ` +
+        `changes: ${changes.changes?.length} | ` +
+        `debug attempts: ${debugAttempts} | ` +
+        `tokens: ${tokenUsage.totalTokens}`
+      );
+
     } catch (err) {
-      logger.error(`Task ${task.id} failed:`, err);
+      logger.error(`Task ${task.id} failed: ${err.message}`);
       updateTask(task.id, { status: 'failed', error: err.message });
     }
   });
@@ -85,8 +104,8 @@ router.post('/instruct', requireAuth, async (req, res) => {
 
 router.get('/task/:taskId', requireAuth, (req, res) => {
   const task = getTask(req.params.taskId);
-  if (!task) return res.status(404).json({ error: 'Task not found' });
-  if (task.userId !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+  if (!task)                          return res.status(404).json({ error: 'Task not found' });
+  if (task.userId !== req.user.id)    return res.status(403).json({ error: 'Forbidden' });
   res.json({ task });
 });
 

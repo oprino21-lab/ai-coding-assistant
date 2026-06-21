@@ -6,17 +6,21 @@ const tasks = new Map();
 function createTask(userId, repoFullName, instruction) {
   const taskId = uuidv4();
   const task = {
-    id: taskId,
+    id:               taskId,
     userId,
     repoFullName,
     instruction,
-    status: 'pending',
-    plan: null,
-    changes: null,
-    appliedChanges: null,
-    error: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    status:           'pending',
+    plan:             null,
+    changes:          null,
+    appliedChanges:   null,
+    error:            null,
+    agentLog:         [],
+    debugAttempts:    0,
+    structuredReport: null,
+    tokenUsage:       null,
+    createdAt:        new Date().toISOString(),
+    updatedAt:        new Date().toISOString()
   };
   tasks.set(taskId, task);
   logger.info(`Task created: ${taskId} for ${repoFullName}`);
