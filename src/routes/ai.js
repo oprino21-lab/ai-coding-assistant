@@ -45,12 +45,23 @@ router.post('/instruct', requireAuth, async (req, res) => {
 
   setImmediate(async () => {
     try {
-      /* Ensure repo is cloned and analyzed */
-      updateTask(task.id, { status: 'thinking', agentLog: [{ phase: 'INIT', message: 'Agent starting — cloning/updating repo...', timestamp: new Date().toISOString() }] });
+      /* Pull latest code before every task so AI always works on fresh files */
+      updateTask(task.id, { status: 'thinking', agentLog: [{ phase: 'INIT', message: 'Pulling latest code from GitHub...', timestamp: new Date().toISOString() }] });
 
       const conn = await getOrConnectRepo(
         req.user.id, req.user.username, req.user.accessToken, repoFullName
       );
+
+      /* git pull — cloneOrUpdateRepo already does pull if .git exists, but we force
+         a fresh pull here so the AI always sees the most recent committed code */
+      try {
+        await githubService.cloneOrUpdateRepo(req.user.accessToken, req.user.username, repoFullName);
+        /* Re-analyze after pull so file tree + key files are current */
+        conn.analysis = await (require('../services/repoAnalyzer').analyzeRepo)(conn.localPath);
+        logger.info(`Task ${task.id}: pulled latest + re-analyzed ${repoFullName}`);
+      } catch (pullErr) {
+        logger.warn(`Task ${task.id}: git pull warning (continuing anyway): ${pullErr.message}`);
+      }
 
       /* Helper passed into the agent loop so it can read files from the local clone */
       async function getFilesContent(filePaths) {

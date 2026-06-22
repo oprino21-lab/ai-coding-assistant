@@ -1,14 +1,16 @@
 require('dotenv').config();
-const express = require('express');
-const session = require('express-session');
-const passport = require('passport');
-const cors = require('cors');
-const path = require('path');
-const logger = require('./utils/logger');
+const express    = require('express');
+const session    = require('express-session');
+const FileStore  = require('session-file-store')(session);
+const passport   = require('passport');
+const cors       = require('cors');
+const path       = require('path');
+const fs         = require('fs-extra');
+const logger     = require('./utils/logger');
 
-const authRoutes   = require('./routes/auth');
-const repoRoutes   = require('./routes/repo');
-const aiRoutes     = require('./routes/ai');
+const authRoutes    = require('./routes/auth');
+const repoRoutes    = require('./routes/repo');
+const aiRoutes      = require('./routes/ai');
 const changesRoutes = require('./routes/changes');
 
 const app  = express();
@@ -20,9 +22,17 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+/* Ensure session directory exists before FileStore initialises */
+fs.ensureDirSync('./sessions');
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'codelite-dev-secret',
-  resave: false,
+  store: new FileStore({
+    path:   './sessions',
+    ttl:    86400,       // 24 h in seconds
+    logFn:  () => {}     // suppress verbose file-store logs
+  }),
+  secret:            process.env.SESSION_SECRET || 'codelite-dev-secret',
+  resave:            false,
   saveUninitialized: false,
   cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }
 }));
@@ -76,8 +86,15 @@ app.use((err, req, res, next) => {
 });
 
 /* ── Server startup with port-conflict recovery ─────────────── */
-const server = app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
   logger.info(`CodeLite backend running → http://0.0.0.0:${PORT}`);
+  /* Restore previously connected repos from disk after server starts */
+  try {
+    const { restoreState } = require('./routes/repo');
+    await restoreState();
+  } catch (e) {
+    logger.warn(`State restore skipped: ${e.message}`);
+  }
 });
 
 server.on('error', (err) => {
